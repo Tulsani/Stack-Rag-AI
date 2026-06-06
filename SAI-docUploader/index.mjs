@@ -10,7 +10,7 @@ import { MIME_TO_EXTENSION } from './types.js';
 // can be managed via api-gateway
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin':  process.env.CORS_ORIGIN ?? '*',
-  'Access-Control-Allow-Headers': 'Content-Type,x-doc-client-id,x-doc-user-id,x-doc-banker-id,x-doc-prospect-id,x-doc-file-type,x-doc-file-sub-type,x-doc-doc-type,x-doc-stage,x-doc-parent-folder,x-doc-uploaded-by,x-doc-linked,x-doc-description,x-doc-tags,x-doc-filename,x-doc-file-size',
+  'Access-Control-Allow-Headers': 'Content-Type,x-doc-client-id,x-doc-user-id,x-doc-file-type,x-doc-file-sub-type,x-doc-doc-type,x-doc-stage,x-doc-parent-folder,x-doc-uploaded-by,x-doc-linked,x-doc-description,x-doc-tags,x-doc-filename,x-doc-file-size',
   'Access-Control-Allow-Methods': 'POST,OPTIONS',
   'Content-Type': 'application/json',
 };

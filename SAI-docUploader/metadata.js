@@ -7,8 +7,6 @@ import { SUPPORTED_MIME_TYPES, MAX_FILE_SIZE_BYTES } from './types.js';
 const H = {
   CLIENT_ID:     'x-doc-client-id',
   USER_ID:       'x-doc-user-id',
-  BANKER_ID:     'x-doc-banker-id',
-  PROSPECT_ID:   'x-doc-prospect-id',
   FILE_TYPE:     'x-doc-file-type',
   FILE_SUB_TYPE: 'x-doc-file-sub-type',
   DOC_TYPE:      'x-doc-doc-type',
