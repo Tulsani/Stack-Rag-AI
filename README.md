@@ -93,6 +93,21 @@ The Chunking-Service worker lives in `./SAI-Chunking-Service/app`:
 4. Generates the chunks and stores them to another chunking bucket
 5. Informs an SNS to allow the embedder service to pick up the chunks for embedding
 
+
+- Required env vars:
+    - CHUNKING_QUEUE_URL
+    - CHUNK_OUTPUT_BUCKET
+    - CHUNK_COMPLETE_TOPIC_ARN
+    - MISTRAL_API_KEY
+
+- Optional config:
+    - MISTRAL_OCR_MODEL
+    - CHUNK_TARGET_TOKENS
+    - CHUNK_OVERLAP_TOKENS
+    - SQS_WAIT_TIME_SECONDS
+    - SQS_VISIBILITY_TIMEOUT_SECONDS
+
+
 ### SAI-Embedding-Service
 Embedding Servicce - chunks to embedded and stored into the s3
 

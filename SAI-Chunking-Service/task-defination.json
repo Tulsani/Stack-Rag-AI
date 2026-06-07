@@ -1,0 +1,43 @@
+{
+  "family": "sai-chunking-worker",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "1024",
+  "memory": "2048",
+  "executionRoleArn": "arn:aws:iam::453875231722:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::453875231722:role/saiChunkingTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "sai-chunking-worker",
+      "image": "453875231722.dkr.ecr.us-east-1.amazonaws.com/sai-chunking-service:latest",
+      "essential": true,
+      "command": ["python", "-m", "app.worker"],
+      "environment": [
+        { "name": "AWS_REGION", "value": "us-east-1" },
+        { "name": "CHUNKING_QUEUE_URL", "value": "sai-chunking-jobs" },
+        { "name": "CHUNK_OUTPUT_BUCKET", "value": "sai-chunks-bucket" },
+        { "name": "CHUNK_COMPLETE_TOPIC_ARN", "value": "arn:aws:sns:us-east-1:453875231722:sai-chunking-complete" },
+        { "name": "MISTRAL_OCR_MODEL", "value": "mistral-ocr-latest" },
+        { "name": "CHUNK_TARGET_TOKENS", "value": "700" },
+        { "name": "CHUNK_OVERLAP_TOKENS", "value": "100" },
+        { "name": "SQS_WAIT_TIME_SECONDS", "value": "20" },
+        { "name": "SQS_VISIBILITY_TIMEOUT_SECONDS", "value": "900" },
+        { "name": "LOG_LEVEL", "value": "INFO" }
+      ],
+      "secrets": [
+        {
+          "name": "MISTRAL_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:453875231722:secret:sai/mistral/api-key"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/sai-chunking-worker",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}
