@@ -82,8 +82,16 @@ curl --location --request PUT '<uploadUrl-from-response>' \
 
 
 ### SAI-Chunking-Service
-Invoked when a S3 object event is created , event driven to scale based on requirement
-Mistral API for OCR
+
+On file object being created on s3 , event notification is triggered and pushed to a SQS queue (can be replaced with open source alternatives like Kafka/RabbitMQ) 
+SQS acts as a buffer to not overwhelm the chunking service and allow it to scale based on incoming requests
+The Chunking-Service worker lives in `./SAI-Chunking-Service/app`:
+
+1. Listens to SQS events of S3 object being writed
+2. Pickups the S3 object from s3
+3. Uses the mistral API to OCR the object 
+4. Generates the chunks and stores them to another chunking bucket
+5. Informs an SNS to allow the embedder service to pick up the chunks for embedding
 
 ### SAI-Embedding-Service
 Embedding Servicce - chunks to embedded and stored into the s3
