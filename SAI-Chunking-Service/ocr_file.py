@@ -1,3 +1,8 @@
+"""
+This a local worker now,
+the major function is shifted to the dockerized format for ECS task in ./app
+"""
+
 from __future__ import annotations
 
 import argparse
