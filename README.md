@@ -109,7 +109,43 @@ The Chunking-Service worker lives in `./SAI-Chunking-Service/app`:
 
 
 ### SAI-Embedding-Service
-Embedding Servicce - chunks to embedded and stored into the s3
+SQS-driven ECS worker that embeds chunk and stores them in PostgreSQL with pgvector. The SNS captures events of completion from chunking service and updates the SQS buffer
+
+1. `chunking-service` writes `chunks.json` to S3.
+2. `chunking-service` publishes `DOCUMENT_CHUNKING_COMPLETED` to SNS.
+3. SNS delivers the message to the embedding SQS queue.
+4. This worker long-polls SQS, downloads the chunk artifact from S3, embeds each chunk with Mistral, and writes rows into `sairag.public.chunks`.
+5. The query engine can combine vector search over `embedding` with keyword search over `content_tsv`.
+
+#### table setup
+
+The worker inserts into the table :
+
+```sql
+CREATE TABLE chunks (
+    chunk_id      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    file_id       TEXT NOT NULL,
+    filename      TEXT NOT NULL,
+    client_id     TEXT,
+    user_id       TEXT,
+    file_type     TEXT,
+    file_sub_type TEXT,
+    doc_type      TEXT,
+    stage         TEXT,
+    page_start    INT,
+    page_end      INT,
+    chunk_index   INT NOT NULL,
+    content       TEXT NOT NULL,
+    embedding     vector(1024),
+    metadata      JSONB DEFAULT '{}'::jsonb,
+    content_tsv   tsvector GENERATED ALWAYS AS (to_tsvector('english', content)) STORED,
+    created_at    TIMESTAMPTZ DEFAULT now()
+);
+```
+
+The worker treats a file embedding job as replaceable/idempotent: inside one transaction it deletes existing rows for `file_id`, then inserts the current artifact chunks. This avoids duplicate rows when SQS retries the same completion message.
+
+
 
 ### SAI-Query-Engine
 A query engine to handle UI Calls
