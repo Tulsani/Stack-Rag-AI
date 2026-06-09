@@ -41,10 +41,9 @@ class MistralClient:
                 {
                     "role": "system",
                     "content": (
-                        "You are a retrieval-augmented assistant. "
-                        "Answer using only the provided context. "
-                        "If the context does not contain enough evidence, "
-                        "say exactly: insufficient evidence."
+                        "You are a retrieval-augmented assistant. Answer using only the provided context. "
+                        "Cite sources inline as [1], [2], etc. If the context does not contain enough "
+                        "evidence, say exactly: insufficient evidence."
                     ),
                 },
                 {
@@ -53,7 +52,6 @@ class MistralClient:
                 },
             ],
         }
-
         result = self._post("https://api.mistral.ai/v1/chat/completions", payload)
         return _message_content_to_text(result["choices"][0]["message"]["content"]).strip()
 

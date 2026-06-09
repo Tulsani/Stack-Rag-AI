@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 
@@ -11,30 +12,100 @@ class ChunkRetriever:
         self,
         query_embedding: list[float],
         top_k: int,
-    ) -> list[str]:
+        client_id: str | None = None,
+        file_id: str | None = None,
+    ) -> list[dict]:
         import psycopg
 
-        sql = """
-            SELECT content
-            FROM chunks
-            WHERE embedding IS NOT NULL
-            ORDER BY embedding <=> %(embedding)s::vector
-            LIMIT %(top_k)s
-        """
-
+        filters = []
         params: dict[str, Any] = {
             "embedding": _to_pgvector(query_embedding),
             "top_k": top_k,
         }
 
+        if client_id:
+            filters.append("client_id = %(client_id)s")
+            params["client_id"] = client_id
+
+        if file_id:
+            filters.append("file_id = %(file_id)s")
+            params["file_id"] = file_id
+
+        where_clause = "WHERE embedding IS NOT NULL"
+        if filters:
+            where_clause += " AND " + " AND ".join(filters)
+
+        sql = f"""
+            SELECT
+                chunk_id::text,
+                file_id,
+                filename,
+                page_start,
+                page_end,
+                chunk_index,
+                content,
+                metadata,
+                1 - (embedding <=> %(embedding)s::vector) AS similarity
+            FROM chunks
+            {where_clause}
+            ORDER BY embedding <=> %(embedding)s::vector
+            LIMIT %(top_k)s
+        """
+
         with psycopg.connect(self.dsn) as conn:
             rows = conn.execute(sql, params).fetchall()
 
-        return [row[0] for row in rows]
+        citations = []
+
+        for index, row in enumerate(rows, start=1):
+            metadata = row[7]
+            if isinstance(metadata, str):
+                metadata = json.loads(metadata)
+
+            citations.append(
+                {
+                    "citation_id": index,
+                    "chunk_id": row[0],
+                    "file_id": row[1],
+                    "filename": row[2],
+                    "page_start": row[3],
+                    "page_end": row[4],
+                    "chunk_index": row[5],
+                    "content": row[6],
+                    "metadata": metadata or {},
+                    "similarity": float(row[8]),
+                }
+            )
+
+        return citations
 
 
-def build_context(chunks: list[str]) -> str:
-    return "\n\n".join(chunks)
+def build_context(citations: list[dict]) -> str:
+    blocks = []
+
+    for citation in citations:
+        page = _page_label(
+            citation.get("page_start"),
+            citation.get("page_end"),
+        )
+
+        blocks.append(
+            f"[{citation['citation_id']}] {citation['filename']} {page}\n"
+            f"file_id={citation['file_id']} chunk_index={citation['chunk_index']}\n"
+            f"{citation['content']}"
+        )
+
+    return "\n\n".join(blocks)
+
+
+def _page_label(page_start: int | None, page_end: int | None) -> str:
+    if page_start is None and page_end is None:
+        return ""
+
+    if page_start == page_end or page_end is None:
+        return f"page {page_start}"
+
+    return f"pages {page_start}-{page_end}"
 
 
 def _to_pgvector(embedding: list[float]) -> str:

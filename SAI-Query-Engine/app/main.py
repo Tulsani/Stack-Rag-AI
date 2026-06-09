@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import os
-
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
@@ -30,8 +29,7 @@ def health():
 @app.post("/query")
 def query(request: dict[str, Any]):
     try:
-        question = request["question"]
-        return get_query_service().answer(question)
+        return get_query_service().answer(request)
     except Exception as exc:
         logger.exception("Query failed")
         raise HTTPException(status_code=500, detail=str(exc)) from exc
@@ -45,10 +43,15 @@ def get_query_service():
         embedding_dimension=int(os.getenv("EMBEDDING_DIMENSION", "1024")),
     )
 
-    retriever = ChunkRetriever(os.environ["POSTGRES_DSN"])
+    retriever = ChunkRetriever(
+        os.environ["POSTGRES_DSN"]
+    )
 
     return QueryService(
         mistral=mistral,
         retriever=retriever,
-        top_k=int(os.getenv("DEFAULT_TOP_K", "5")),
+        default_top_k=int(os.getenv("DEFAULT_TOP_K", "5")),
+        default_min_similarity=float(
+            os.getenv("MIN_SIMILARITY", "0.5")
+        ),
     )
