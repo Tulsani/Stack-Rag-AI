@@ -1,7 +1,17 @@
 from __future__ import annotations
 
 from .mistral_client import MistralClient
+from .models import QueryRequest, QueryResponse
 from .retrieval import ChunkRetriever, build_context
+
+GREETING_QUERIES = {
+    "hi",
+    "hello",
+    "hey",
+    "good morning",
+    "good afternoon",
+    "good evening",
+}
 
 
 class QueryService:
@@ -17,43 +27,48 @@ class QueryService:
         self.default_top_k = default_top_k
         self.default_min_similarity = default_min_similarity
 
-    def answer(self, request: dict) -> dict:
-        question = request["question"].strip()
+    def answer(self, request: QueryRequest) -> QueryResponse:
+        question = request.question.strip()
+        if _is_greeting(question):
+            return QueryResponse(
+                answer="Hello. Ask a question about the uploaded knowledge base and I can search it.",
+                used_retrieval=False,
+                insufficient_evidence=False,
+                citations=[],
+            )
 
-        top_k = request.get("top_k") or self.default_top_k
-        min_similarity = request.get("min_similarity")
+        top_k = request.top_k or self.default_top_k
+        min_similarity = request.min_similarity
         if min_similarity is None:
             min_similarity = self.default_min_similarity
 
+        query_embedding = self.mistral.embed_query(question)
         citations = self.retriever.search(
-            query_embedding=self.mistral.embed_query(question),
+            query_embedding=query_embedding,
             top_k=top_k,
-            client_id=request.get("client_id"),
-            file_id=request.get("file_id"),
+            client_id=request.client_id,
+            file_id=request.file_id,
         )
 
-        usable_citations = [
-            citation
-            for citation in citations
-            if citation["similarity"] >= min_similarity
-        ]
-
+        usable_citations = [citation for citation in citations if citation.similarity >= min_similarity]
         if not usable_citations:
-            return {
-                "answer": "insufficient evidence",
-                "used_retrieval": True,
-                "insufficient_evidence": True,
-                "citations": citations,
-            }
+            return QueryResponse(
+                answer="insufficient evidence",
+                used_retrieval=True,
+                insufficient_evidence=True,
+                citations=citations,
+            )
 
-        answer = self.mistral.answer(
-            question=question,
-            context=build_context(usable_citations),
+        answer = self.mistral.answer(question=question, context=build_context(usable_citations))
+        insufficient = answer.strip().lower() == "insufficient evidence"
+        return QueryResponse(
+            answer=answer,
+            used_retrieval=True,
+            insufficient_evidence=insufficient,
+            citations=usable_citations,
         )
 
-        return {
-            "answer": answer,
-            "used_retrieval": True,
-            "insufficient_evidence": answer.strip().lower() == "insufficient evidence",
-            "citations": usable_citations,
-        }
+
+def _is_greeting(question: str) -> bool:
+    normalized = question.lower().strip(" .!?")
+    return normalized in GREETING_QUERIES

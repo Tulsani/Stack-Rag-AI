@@ -2,16 +2,20 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any
+from functools import lru_cache
 
 from fastapi import FastAPI, HTTPException
 
+from .config import Settings
 from .mistral_client import MistralClient
+from .models import HealthResponse, QueryRequest, QueryResponse
 from .retrieval import ChunkRetriever
 from .service import QueryService
 
-
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO"),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
@@ -21,13 +25,13 @@ app = FastAPI(
 )
 
 
-@app.get("/health")
-def health():
-    return {"status": "ok"}
+@app.get("/health", response_model=HealthResponse)
+def health() -> HealthResponse:
+    return HealthResponse(status="ok")
 
 
-@app.post("/query")
-def query(request: dict[str, Any]):
+@app.post("/query", response_model=QueryResponse)
+def query(request: QueryRequest) -> QueryResponse:
     try:
         return get_query_service().answer(request)
     except Exception as exc:
@@ -35,23 +39,19 @@ def query(request: dict[str, Any]):
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
-def get_query_service():
+@lru_cache(maxsize=1)
+def get_query_service() -> QueryService:
+    settings = Settings.from_env()
     mistral = MistralClient(
-        api_key=os.environ["MISTRAL_API_KEY"],
-        embed_model=os.getenv("MISTRAL_EMBED_MODEL", "mistral-embed"),
-        chat_model=os.getenv("MISTRAL_CHAT_MODEL", "mistral-small-latest"),
-        embedding_dimension=int(os.getenv("EMBEDDING_DIMENSION", "1024")),
+        api_key=settings.mistral_api_key,
+        embed_model=settings.mistral_embed_model,
+        chat_model=settings.mistral_chat_model,
+        embedding_dimension=settings.embedding_dimension,
     )
-
-    retriever = ChunkRetriever(
-        os.environ["POSTGRES_DSN"]
-    )
-
+    retriever = ChunkRetriever(settings.postgres_dsn)
     return QueryService(
         mistral=mistral,
         retriever=retriever,
-        default_top_k=int(os.getenv("DEFAULT_TOP_K", "5")),
-        default_min_similarity=float(
-            os.getenv("MIN_SIMILARITY", "0.5")
-        ),
+        default_top_k=settings.default_top_k,
+        default_min_similarity=settings.min_similarity,
     )
