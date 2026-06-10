@@ -55,6 +55,7 @@ def get_query_service() -> QueryService:
         api_key=settings.mistral_api_key,
         embed_model=settings.mistral_embed_model,
         chat_model=settings.mistral_chat_model,
+        query_rewrite_model=settings.mistral_query_rewrite_model,
         embedding_dimension=settings.embedding_dimension,
     )
     retriever = ChunkRetriever(settings.postgres_dsn)

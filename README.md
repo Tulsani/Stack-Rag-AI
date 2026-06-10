@@ -182,6 +182,17 @@ curl --location 'http://localhost:8000/query/hybrid' \
 
 The keyword side uses `websearch_to_tsquery('english', question)` and `ts_rank_cd(content_tsv, query)`. The final result order is merged with reciprocal rank fusion.
 
+Both query endpoints use multi-query rewriting by default. The original question is always included, and Mistral can generate up to 3 extra retrieval queries. The response includes `rewritten_queries` for debugging
+
+Disable rewriting for debugging:
+
+```json
+{
+  "question": "What does the uploaded document say about termination?",
+  "use_query_rewrite": false
+}
+```
+
 #### Run Locally
 
 ```bash

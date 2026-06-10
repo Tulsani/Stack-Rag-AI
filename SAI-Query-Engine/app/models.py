@@ -11,6 +11,8 @@ class QueryRequest(BaseModel):
     client_id: str | None = None
     file_id: str | None = None
     min_similarity: float | None = Field(default=None, ge=0.0, le=1.0)
+    use_query_rewrite: bool = True
+    max_rewrites: int = Field(default=3, ge=0, le=3)
 
 
 class HybridQueryRequest(QueryRequest):
@@ -39,6 +41,7 @@ class QueryResponse(BaseModel):
     used_retrieval: bool
     insufficient_evidence: bool
     citations: list[Citation]
+    rewritten_queries: list[str] = Field(default_factory=list)
 
 
 class HealthResponse(BaseModel):

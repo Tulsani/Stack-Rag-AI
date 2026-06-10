@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
@@ -9,10 +10,18 @@ logger = logging.getLogger(__name__)
 
 
 class MistralClient:
-    def __init__(self, api_key: str, embed_model: str, chat_model: str, embedding_dimension: int) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        embed_model: str,
+        chat_model: str,
+        query_rewrite_model: str,
+        embedding_dimension: int,
+    ) -> None:
         self.api_key = api_key
         self.embed_model = embed_model
         self.chat_model = chat_model
+        self.query_rewrite_model = query_rewrite_model
         self.embedding_dimension = embedding_dimension
 
     def embed_query(self, query: str) -> list[float]:
@@ -54,6 +63,63 @@ class MistralClient:
         }
         result = self._post("https://api.mistral.ai/v1/chat/completions", payload)
         return _message_content_to_text(result["choices"][0]["message"]["content"]).strip()
+
+    def rewrite_queries(self, question: str, max_rewrites: int) -> list[str]:
+        if max_rewrites <= 0:
+            return []
+
+        payload = {
+            "model": self.query_rewrite_model,
+            "temperature": 0.2,
+            "max_tokens": 250,
+            "response_format": {"type": "json_object"},
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "Rewrite user questions into concise retrieval queries for a document RAG system. "
+                        "Generate diverse keyword-rich paraphrases with synonyms and domain terms. "
+                        "Do not answer the question. Return only JSON in this shape: "
+                        "{\"queries\":[\"query one\",\"query two\"]}."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Question: {question}\n"
+                        f"Return up to {max_rewrites} rewritten search queries."
+                    ),
+                },
+            ],
+        }
+        result = self._post("https://api.mistral.ai/v1/chat/completions", payload)
+        content = _message_content_to_text(result["choices"][0]["message"]["content"])
+        try:
+            parsed = json.loads(content)
+        except json.JSONDecodeError:
+            logger.warning("Mistral query rewrite returned non-JSON content", extra={"content": content[:500]})
+            return []
+
+        queries = parsed.get("queries") or []
+        if not isinstance(queries, list):
+            return []
+
+        seen = {question.strip().lower()}
+        rewrites = []
+        for query in queries:
+            if not isinstance(query, str):
+                continue
+            cleaned = " ".join(query.split())
+            if not cleaned:
+                continue
+            key = cleaned.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            rewrites.append(cleaned)
+            if len(rewrites) >= max_rewrites:
+                break
+        return rewrites
 
     def _post(self, url: str, payload: dict[str, Any]) -> dict[str, Any]:
         with httpx.Client(timeout=httpx.Timeout(120.0)) as client:

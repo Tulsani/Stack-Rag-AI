@@ -29,6 +29,7 @@ class Settings:
     mistral_api_key: str
     mistral_embed_model: str
     mistral_chat_model: str
+    mistral_query_rewrite_model: str
     embedding_dimension: int
     postgres_host: str
     postgres_port: int
@@ -56,6 +57,7 @@ class Settings:
             mistral_api_key=required["MISTRAL_API_KEY"],
             mistral_embed_model=os.getenv("MISTRAL_EMBED_MODEL", "mistral-embed"),
             mistral_chat_model=os.getenv("MISTRAL_CHAT_MODEL", "mistral-small-latest"),
+            mistral_query_rewrite_model=os.getenv("MISTRAL_QUERY_REWRITE_MODEL", "mistral-small-latest"),
             embedding_dimension=_int_env("EMBEDDING_DIMENSION", 1024),
             postgres_host=required["POSTGRES_HOST"],
             postgres_port=_int_env("POSTGRES_PORT", 5432),

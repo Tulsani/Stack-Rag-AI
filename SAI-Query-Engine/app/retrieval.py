@@ -73,6 +73,7 @@ class ChunkRetriever:
                     content=row[6],
                     metadata=metadata or {},
                     similarity=float(row[8]),
+                    vector_similarity=float(row[8]),
                 )
             )
         return citations
