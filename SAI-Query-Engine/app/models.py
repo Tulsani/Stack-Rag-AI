@@ -45,6 +45,7 @@ class QueryResponse(BaseModel):
     rewritten_queries: list[str] = Field(default_factory=list)
     intent: str | None = None
     answer_style: str | None = None
+    policy_warning: str | None = None
 
 
 class QueryPlan(BaseModel):

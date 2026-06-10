@@ -4,6 +4,7 @@ import logging
 
 from .mistral_client import MistralClient
 from .models import Citation, HybridQueryRequest, QueryPlan, QueryRequest, QueryResponse
+from .policy import evaluate_document_policy
 from .retrieval import ChunkRetriever, build_context
 
 logger = logging.getLogger(__name__)
@@ -66,6 +67,19 @@ class QueryService:
         citations = _merge_citation_lists(citation_lists, top_k)
 
         usable_citations = [citation for citation in citations if citation.similarity >= min_similarity]
+        document_policy = evaluate_document_policy(usable_citations)
+        if usable_citations and not document_policy.allowed:
+            return QueryResponse(
+                answer=document_policy.answer or "I cannot answer from the retrieved document tags.",
+                used_retrieval=True,
+                insufficient_evidence=False,
+                citations=usable_citations,
+                rewritten_queries=rewritten_queries,
+                intent=plan.intent,
+                answer_style=plan.answer_style,
+                policy_warning=document_policy.warning,
+            )
+
         if not usable_citations:
             return QueryResponse(
                 answer="insufficient evidence",
@@ -91,6 +105,7 @@ class QueryService:
             rewritten_queries=rewritten_queries,
             intent=plan.intent,
             answer_style=plan.answer_style,
+            policy_warning=document_policy.warning,
         )
 
     def hybrid_answer(self, request: HybridQueryRequest) -> QueryResponse:
@@ -135,6 +150,19 @@ class QueryService:
             for citation in citations
             if citation.vector_similarity is None or citation.vector_similarity >= min_similarity
         ]
+        document_policy = evaluate_document_policy(usable_citations)
+        if usable_citations and not document_policy.allowed:
+            return QueryResponse(
+                answer=document_policy.answer or "I cannot answer from the retrieved document tags.",
+                used_retrieval=True,
+                insufficient_evidence=False,
+                citations=usable_citations,
+                rewritten_queries=rewritten_queries,
+                intent=plan.intent,
+                answer_style=plan.answer_style,
+                policy_warning=document_policy.warning,
+            )
+
         if not usable_citations:
             return QueryResponse(
                 answer="insufficient evidence",
@@ -160,6 +188,7 @@ class QueryService:
             rewritten_queries=rewritten_queries,
             intent=plan.intent,
             answer_style=plan.answer_style,
+            policy_warning=document_policy.warning,
         )
 
     def _plan_query(self, question: str, request: QueryRequest) -> QueryPlan:
