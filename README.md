@@ -27,7 +27,7 @@ Note: the current ingestion endpoint is a serverless uploader instead of a FastA
 
 ## Design Considerations
 
-### 1. Data Ingestion
+##### 1. Data Ingestion
 
 PDF uploads use a pre-signed S3 URL rather than routing file bytes through the backend. This keeps the API stateless, avoids API Gateway/FastAPI body-size pressure, and lets large uploads be retried directly against object storage.
 
@@ -35,7 +35,7 @@ The metadata request captures fields such as `client_id`, `user_id`, document ty
 
 SQS is used between upload and chunking because OCR is slower than upload. The queue gives backpressure, retry behavior, and a clean scaling signal for ECS workers.
 
-### 2. Text Extraction and Chunking
+##### 2. Text Extraction and Chunking
 
 `SAI-Chunking-Service` uses Mistral OCR for PDF extraction. OCR output is normalized into pages before chunking.
 
@@ -50,7 +50,7 @@ Chunking considerations:
 
 The tradeoff is that whitespace token counting is approximate. It is fast and simple, but not identical to Mistral's tokenizer.
 
-### 3. Query Processing
+##### 3. Query Processing
 
 The query engine first builds a query plan:
 
@@ -63,7 +63,7 @@ This prevents obvious non-document requests like `hello` from wasting embedding 
 
 Query rewriting improves recall by expanding the user question into short search-oriented variants. For example, a broad question about termination might be rewritten with terms such as cancellation, expiry, notice period, or agreement end date. The system always searches the original query too, so rewriting cannot erase the user's wording.
 
-### 4. Semantic and Keyword Search
+##### 4. Semantic and Keyword Search
 
 Semantic search:
 
@@ -87,7 +87,7 @@ Hybrid merge:
   - `rrf_k`: `60`
 - This keeps semantic search dominant while letting exact keyword hits lift relevant chunks.
 
-### 5. Post-Processing and Reranking
+##### 5. Post-Processing and Reranking
 
 Each original or rewritten query can return overlapping chunks. The service deduplicates candidates by `chunk_id` and keeps the candidate with the strongest score.
 
@@ -110,7 +110,7 @@ Before generation, citations must pass `min_similarity`. If no retrieved chunk m
 
 This is the main citation-required guardrail: the answer model only receives chunks that cleared the evidence threshold.
 
-### 6. Generation
+##### 6. Generation
 
 The answer prompt tells Mistral to:
 
@@ -131,7 +131,7 @@ Answer shaping is selected by the query planner:
 
 The UI can parse these wrappers for richer rendering while preserving the raw answer in chat history.
 
-### 7. Policy and Hallucination Controls
+##### 7. Policy and Hallucination Controls
 
 Policy checks are metadata-driven and run after retrieval:
 
