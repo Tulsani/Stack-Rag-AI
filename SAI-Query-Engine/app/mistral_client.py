@@ -6,6 +6,8 @@ from typing import Any
 
 import httpx
 
+from .models import QueryPlan
+
 logger = logging.getLogger(__name__)
 
 
@@ -41,7 +43,7 @@ class MistralClient:
             )
         return embedding
 
-    def answer(self, question: str, context: str) -> str:
+    def answer(self, question: str, context: str, answer_style: str = "factual") -> str:
         payload = {
             "model": self.chat_model,
             "temperature": 0.1,
@@ -52,7 +54,8 @@ class MistralClient:
                     "content": (
                         "You are a retrieval-augmented assistant. Answer using only the provided context. "
                         "Cite sources inline as [1], [2], etc. If the context does not contain enough "
-                        "evidence, say exactly: insufficient evidence."
+                        "evidence, say exactly: insufficient evidence. "
+                        f"Use this answer style when possible: {answer_style}."
                     ),
                 },
                 {
@@ -63,6 +66,53 @@ class MistralClient:
         }
         result = self._post("https://api.mistral.ai/v1/chat/completions", payload)
         return _message_content_to_text(result["choices"][0]["message"]["content"]).strip()
+
+    def plan_query(self, question: str, max_rewrites: int) -> QueryPlan:
+        payload = {
+            "model": self.query_rewrite_model,
+            "temperature": 0.1,
+            "max_tokens": 400,
+            "response_format": {"type": "json_object"},
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a query planner for a document RAG system. Decide whether the user "
+                        "question requires searching uploaded documents. Return only JSON with this shape: "
+                        "{\"intent\":\"greeting|capability_question|knowledge_base_question|summary_request|"
+                        "comparison_request|out_of_scope|unsafe_or_sensitive\","
+                        "\"should_search\":true,"
+                        "\"direct_answer\":null,"
+                        "\"rewritten_queries\":[\"query one\"],"
+                        "\"answer_style\":\"factual|summary|list|table|comparison|conversational\"}.\n"
+                        "Rules: should_search=false for greetings, small talk, capability questions, "
+                        "unrelated general knowledge, or unsafe/sensitive requests. should_search=true only "
+                        "when the user asks about uploaded documents or likely document contents. Generate up "
+                        "to the requested number of concise retrieval queries. Do not answer knowledge-base "
+                        "questions directly."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"Question: {question}\n"
+                        f"Generate up to {max_rewrites} rewritten retrieval queries."
+                    ),
+                },
+            ],
+        }
+        result = self._post("https://api.mistral.ai/v1/chat/completions", payload)
+        content = _message_content_to_text(result["choices"][0]["message"]["content"])
+        try:
+            parsed = json.loads(content)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Mistral query planner returned non-JSON content: {content[:500]}") from exc
+
+        plan = QueryPlan.model_validate(parsed)
+        plan.rewritten_queries = _clean_rewrites(question, plan.rewritten_queries, max_rewrites)
+        if not plan.direct_answer and not plan.should_search:
+            plan.direct_answer = "I can help answer questions about the uploaded knowledge base."
+        return plan
 
     def rewrite_queries(self, question: str, max_rewrites: int) -> list[str]:
         if max_rewrites <= 0:
@@ -104,22 +154,7 @@ class MistralClient:
         if not isinstance(queries, list):
             return []
 
-        seen = {question.strip().lower()}
-        rewrites = []
-        for query in queries:
-            if not isinstance(query, str):
-                continue
-            cleaned = " ".join(query.split())
-            if not cleaned:
-                continue
-            key = cleaned.lower()
-            if key in seen:
-                continue
-            seen.add(key)
-            rewrites.append(cleaned)
-            if len(rewrites) >= max_rewrites:
-                break
-        return rewrites
+        return _clean_rewrites(question, queries, max_rewrites)
 
     def _post(self, url: str, payload: dict[str, Any]) -> dict[str, Any]:
         with httpx.Client(timeout=httpx.Timeout(120.0)) as client:
@@ -159,3 +194,25 @@ def _message_content_to_text(content: Any) -> str:
                 parts.append(item.get("text", ""))
         return "".join(parts)
     return str(content)
+
+
+def _clean_rewrites(question: str, queries: Any, max_rewrites: int) -> list[str]:
+    if not isinstance(queries, list):
+        return []
+
+    seen = {question.strip().lower()}
+    rewrites = []
+    for query in queries:
+        if not isinstance(query, str):
+            continue
+        cleaned = " ".join(query.split())
+        if not cleaned:
+            continue
+        key = cleaned.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        rewrites.append(cleaned)
+        if len(rewrites) >= max_rewrites:
+            break
+    return rewrites

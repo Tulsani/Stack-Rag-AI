@@ -11,6 +11,7 @@ class QueryRequest(BaseModel):
     client_id: str | None = None
     file_id: str | None = None
     min_similarity: float | None = Field(default=None, ge=0.0, le=1.0)
+    use_query_planner: bool = True
     use_query_rewrite: bool = True
     max_rewrites: int = Field(default=3, ge=0, le=3)
 
@@ -42,6 +43,16 @@ class QueryResponse(BaseModel):
     insufficient_evidence: bool
     citations: list[Citation]
     rewritten_queries: list[str] = Field(default_factory=list)
+    intent: str | None = None
+    answer_style: str | None = None
+
+
+class QueryPlan(BaseModel):
+    intent: str = "knowledge_base_question"
+    should_search: bool = True
+    direct_answer: str | None = None
+    rewritten_queries: list[str] = Field(default_factory=list)
+    answer_style: str = "factual"
 
 
 class HealthResponse(BaseModel):

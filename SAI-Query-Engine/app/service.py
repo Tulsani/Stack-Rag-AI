@@ -3,8 +3,7 @@ from __future__ import annotations
 import logging
 
 from .mistral_client import MistralClient
-from .models import Citation
-from .models import HybridQueryRequest, QueryRequest, QueryResponse
+from .models import Citation, HybridQueryRequest, QueryPlan, QueryRequest, QueryResponse
 from .retrieval import ChunkRetriever, build_context
 
 logger = logging.getLogger(__name__)
@@ -34,13 +33,16 @@ class QueryService:
 
     def answer(self, request: QueryRequest) -> QueryResponse:
         question = request.question.strip()
-        if _is_greeting(question):
+        plan = self._plan_query(question, request)
+        if not plan.should_search:
             return QueryResponse(
-                answer="Hello. Ask a question about the uploaded knowledge base and I can search it.",
+                answer=plan.direct_answer or "I can help answer questions about the uploaded knowledge base.",
                 used_retrieval=False,
                 insufficient_evidence=False,
                 citations=[],
-                rewritten_queries=[],
+                rewritten_queries=plan.rewritten_queries,
+                intent=plan.intent,
+                answer_style=plan.answer_style,
             )
 
         top_k = request.top_k or self.default_top_k
@@ -48,7 +50,7 @@ class QueryService:
         if min_similarity is None:
             min_similarity = self.default_min_similarity
 
-        rewritten_queries = self._rewrite_queries(question, request.use_query_rewrite, request.max_rewrites)
+        rewritten_queries = plan.rewritten_queries if request.use_query_rewrite else []
         retrieval_queries = [question, *rewritten_queries]
         citation_lists = []
         for retrieval_query in retrieval_queries:
@@ -71,9 +73,15 @@ class QueryService:
                 insufficient_evidence=True,
                 citations=citations,
                 rewritten_queries=rewritten_queries,
+                intent=plan.intent,
+                answer_style=plan.answer_style,
             )
 
-        answer = self.mistral.answer(question=question, context=build_context(usable_citations))
+        answer = self.mistral.answer(
+            question=question,
+            context=build_context(usable_citations),
+            answer_style=plan.answer_style,
+        )
         insufficient = answer.strip().lower() == "insufficient evidence"
         return QueryResponse(
             answer=answer,
@@ -81,17 +89,22 @@ class QueryService:
             insufficient_evidence=insufficient,
             citations=usable_citations,
             rewritten_queries=rewritten_queries,
+            intent=plan.intent,
+            answer_style=plan.answer_style,
         )
 
     def hybrid_answer(self, request: HybridQueryRequest) -> QueryResponse:
         question = request.question.strip()
-        if _is_greeting(question):
+        plan = self._plan_query(question, request)
+        if not plan.should_search:
             return QueryResponse(
-                answer="Hello. Ask a question about the uploaded knowledge base and I can search it.",
+                answer=plan.direct_answer or "I can help answer questions about the uploaded knowledge base.",
                 used_retrieval=False,
                 insufficient_evidence=False,
                 citations=[],
-                rewritten_queries=[],
+                rewritten_queries=plan.rewritten_queries,
+                intent=plan.intent,
+                answer_style=plan.answer_style,
             )
 
         top_k = request.top_k or self.default_top_k
@@ -99,7 +112,7 @@ class QueryService:
         if min_similarity is None:
             min_similarity = self.default_min_similarity
 
-        rewritten_queries = self._rewrite_queries(question, request.use_query_rewrite, request.max_rewrites)
+        rewritten_queries = plan.rewritten_queries if request.use_query_rewrite else []
         retrieval_queries = [question, *rewritten_queries]
         citation_lists = []
         for retrieval_query in retrieval_queries:
@@ -129,9 +142,15 @@ class QueryService:
                 insufficient_evidence=True,
                 citations=citations,
                 rewritten_queries=rewritten_queries,
+                intent=plan.intent,
+                answer_style=plan.answer_style,
             )
 
-        answer = self.mistral.answer(question=question, context=build_context(usable_citations))
+        answer = self.mistral.answer(
+            question=question,
+            context=build_context(usable_citations),
+            answer_style=plan.answer_style,
+        )
         insufficient = answer.strip().lower() == "insufficient evidence"
         return QueryResponse(
             answer=answer,
@@ -139,7 +158,39 @@ class QueryService:
             insufficient_evidence=insufficient,
             citations=usable_citations,
             rewritten_queries=rewritten_queries,
+            intent=plan.intent,
+            answer_style=plan.answer_style,
         )
+
+    def _plan_query(self, question: str, request: QueryRequest) -> QueryPlan:
+        if not request.use_query_planner:
+            return QueryPlan(
+                intent="greeting" if _is_greeting(question) else "knowledge_base_question",
+                should_search=not _is_greeting(question),
+                direct_answer="Hello. Ask a question about the uploaded knowledge base and I can search it."
+                if _is_greeting(question)
+                else None,
+                rewritten_queries=self._rewrite_queries(question, request.use_query_rewrite, request.max_rewrites),
+                answer_style="conversational" if _is_greeting(question) else "factual",
+            )
+
+        try:
+            plan = self.mistral.plan_query(question, request.max_rewrites if request.use_query_rewrite else 0)
+        except Exception:
+            logger.exception("Query planning failed; falling back to local greeting check and rewrite")
+            return QueryPlan(
+                intent="greeting" if _is_greeting(question) else "knowledge_base_question",
+                should_search=not _is_greeting(question),
+                direct_answer="Hello. Ask a question about the uploaded knowledge base and I can search it."
+                if _is_greeting(question)
+                else None,
+                rewritten_queries=self._rewrite_queries(question, request.use_query_rewrite, request.max_rewrites),
+                answer_style="conversational" if _is_greeting(question) else "factual",
+            )
+
+        if not request.use_query_rewrite:
+            plan.rewritten_queries = []
+        return plan
 
     def _rewrite_queries(self, question: str, enabled: bool, max_rewrites: int) -> list[str]:
         if not enabled or max_rewrites <= 0:
