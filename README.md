@@ -4,13 +4,149 @@ lets setup a v1 architecture implementation for the RAG app , this could evovle 
 
 ![system-architecture](./statics/Stack-RAG-system-architecture.png)
 
-### Dividing into indivisually scalalbale microservices
+### The implementation is split into independently scalalbale microservices
 -  Uploading service
 -  Chunking service
 -  Embedding service
 -  Query Engine
 
 Note: the current ingestion endpoint is a serverless uploader instead of a FastAPI multipart endpoint. The query service itself is FastAPI. This split is intentional because large PDF bytes should go directly to object storage, while FastAPI remains focused on low-latency query traffic.
+
+## System Overview
+
+1. A client uploads PDF metadata to `SAI-docUploader` and receives a pre-signed S3 URL.
+2. The client uploads the PDF bytes directly to S3.
+3. S3 object-created events are buffered through SQS for the chunking service.
+4. `SAI-Chunking-Service` downloads the PDF, extracts text with Mistral OCR, chunks the extracted text, writes a chunk artifact to S3, and publishes a completion event.
+5. `SAI-Embedding-Service` consumes the completion event, embeds each chunk with Mistral embeddings, and stores chunk text, metadata, full-text search data, and embeddings in PostgreSQL.
+6. `SAI-Query-Engine` exposes FastAPI query endpoints. It plans the user query, decides whether retrieval is needed, rewrites retrieval queries, performs semantic or hybrid search, reranks/filters citations, and calls Mistral chat completion to generate a cited answer.
+7. The Angular UI calls the upload and query APIs so users can upload PDFs and chat with the knowledge base.
+
+## Design Considerations
+
+### 1. Data Ingestion
+
+PDF uploads use a pre-signed S3 URL rather than routing file bytes through the backend. This keeps the API stateless, avoids API Gateway/FastAPI body-size pressure, and lets large uploads be retried directly against object storage.
+
+The metadata request captures fields such as `client_id`, `user_id`, document type, stage, folder, tags, and filename. These values are preserved through chunking and embedding so the query engine can filter by client or file and apply policy rules.
+
+SQS is used between upload and chunking because OCR is slower than upload. The queue gives backpressure, retry behavior, and a clean scaling signal for ECS workers.
+
+### 2. Text Extraction and Chunking
+
+`SAI-Chunking-Service` uses Mistral OCR for PDF extraction. OCR output is normalized into pages before chunking.
+
+Chunking considerations:
+
+- Preserve paragraph boundaries first, because splitting mid-paragraph often hurts retrieval quality.
+- Use approximate token counts based on whitespace for a lightweight dependency-free chunker.
+- Keep configurable overlap so answers that span chunk boundaries still have enough context.
+- Track `page_start`, `page_end`, `chunk_index`, and chunk artifact IDs so citations can point back to source pages and source metadata.
+- Slice very large paragraphs when a paragraph exceeds the target chunk size.
+- Treat chunk artifacts as replaceable for the same `file_id`, making SQS retries idempotent.
+
+The tradeoff is that whitespace token counting is approximate. It is fast and simple, but not identical to Mistral's tokenizer.
+
+### 3. Query Processing
+
+The query engine first builds a query plan:
+
+- `intent`: greeting, capability question, knowledge-base question, summary request, comparison request, unsafe/sensitive request, and similar categories.
+- `should_search`: whether the system should retrieve from the knowledge base.
+- `rewritten_queries`: optional retrieval variants.
+- `answer_style`: factual, summary, list, table, chart, comparison, or conversational.
+
+This prevents obvious non-document requests like `hello` from wasting embedding and search calls. If the planner call fails, the service falls back to deterministic greeting detection and can still answer normal knowledge-base questions.
+
+Query rewriting improves recall by expanding the user question into short search-oriented variants. For example, a broad question about termination might be rewritten with terms such as cancellation, expiry, notice period, or agreement end date. The system always searches the original query too, so rewriting cannot erase the user's wording.
+
+### 4. Semantic and Keyword Search
+
+Semantic search:
+
+- Mistral embeddings are stored in the `embedding` column.
+- `/query` embeds the processed query and orders chunks by vector distance.
+- Optional `client_id` and `file_id` filters narrow the search space.
+
+Keyword search:
+
+- PostgreSQL stores `content_tsv` as a generated `tsvector` column.
+- `/query/hybrid` uses `websearch_to_tsquery('english', query)` and `ts_rank_cd`.
+- Keyword matching helps with exact names, IDs, legal terms, rare acronyms, and quoted phrases that embeddings may blur.
+
+Hybrid merge:
+
+- Vector candidates and keyword candidates are collected separately.
+- Results are joined by `chunk_id`.
+- Weighted reciprocal rank fusion combines rankings:
+  - semantic default weight: `0.65`
+  - keyword default weight: `0.35`
+  - `rrf_k`: `60`
+- This keeps semantic search dominant while letting exact keyword hits lift relevant chunks.
+
+### 5. Post-Processing and Reranking
+
+Each original or rewritten query can return overlapping chunks. The service deduplicates candidates by `chunk_id` and keeps the candidate with the strongest score.
+
+Final ranking uses the best available score:
+
+- `hybrid_score` for hybrid results
+- otherwise vector `similarity`
+- otherwise keyword score
+
+Before generation, citations must pass `min_similarity`. If no retrieved chunk meets the threshold, the system refuses to answer with:
+
+```json
+{
+  "answer": "insufficient evidence",
+  "used_retrieval": true,
+  "insufficient_evidence": true,
+  "citations": []
+}
+```
+
+This is the main citation-required guardrail: the answer model only receives chunks that cleared the evidence threshold.
+
+### 6. Generation
+
+The answer prompt tells Mistral to:
+
+- answer only from the retrieved context
+- cite source chunks inline as `[1]`, `[2]`, etc.
+- return exactly `insufficient evidence` when context is not enough
+- avoid scripts, event handlers, iframes, external links, and unsafe HTML in structured outputs
+
+Answer shaping is selected by the query planner:
+
+- `factual`: concise prose with citations
+- `summary`: 3-5 evidence-backed bullets
+- `list`: safe HTML list wrapped in `<rag-output-list>...</rag-output-list>`
+- `table`: safe HTML table wrapped in `<rag-output-table>...</rag-output-table>`
+- `chart`: JSON chart spec wrapped in `<rag-output-chart>...</rag-output-chart>`
+- `comparison`: compact comparison prose or table
+- `conversational`: short non-retrieval response
+
+The UI can parse these wrappers for richer rendering while preserving the raw answer in chat history.
+
+### 7. Policy and Hallucination Controls
+
+Policy checks are metadata-driven and run after retrieval:
+
+- `pii`, `private`, `confidential`, `personal`, or `sensitive` tags refuse the answer.
+- `medical`, `health`, `clinical`, or `patient` tags allow an answer but return a medical disclaimer.
+- `legal`, `contract`, `nda`, or `agreement` tags allow an answer but return a legal disclaimer.
+
+Example warning:
+
+```json
+{
+  "policy_warning": "Legal/contract document: this is a document summary, not legal advice."
+}
+```
+
+The query response schema also supports `hallucination_warning` and `unsupported_claims`. A deterministic citation checker is included in `SAI-Query-Engine/app/hallucination.py`; it scans generated factual sentences for valid citation markers. This is designed as a post-generation filter so unsupported claims can be surfaced or converted to `insufficient evidence`.
+
+## Services
 
 ### SAI-DocUploader
 A serverless uploader to push files to object store (S3 for our case).
@@ -167,7 +303,7 @@ FastAPI service for querying chunks embedded into PostgreSQL/pgvector.
 #### Semantic Query
 
 ```bash
-curl --location 'http://localhost:8000/query' \
+curl --location 'http://sai-query-alb-176439024.us-east-1.elb.amazonaws.com/query' \
   --header 'Content-Type: application/json' \
   --data '{
     "question": "Is Akshat Tulsani a good fit for stackAI? Stack AI is building ai agents in healthcare and designing rag solutions ",
@@ -178,7 +314,7 @@ curl --location 'http://localhost:8000/query' \
 #### Hybrid Query
 
 ```bash
-curl --location 'http://localhost:8000/query/hybrid' \
+curl --location 'http://sai-query-alb-176439024.us-east-1.elb.amazonaws.com/query/hybrid' \
   --header 'Content-Type: application/json' \
   --data '{
     "question": "What does the uploaded document say about termination?",
