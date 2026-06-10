@@ -13,6 +13,11 @@ class QueryRequest(BaseModel):
     min_similarity: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
+class HybridQueryRequest(QueryRequest):
+    semantic_weight: float = Field(default=0.65, ge=0.0, le=1.0)
+    keyword_weight: float = Field(default=0.35, ge=0.0, le=1.0)
+
+
 class Citation(BaseModel):
     citation_id: int
     chunk_id: str
@@ -22,6 +27,9 @@ class Citation(BaseModel):
     page_end: int | None
     chunk_index: int
     similarity: float
+    vector_similarity: float | None = None
+    keyword_score: float | None = None
+    hybrid_score: float | None = None
     content: str
     metadata: dict[str, Any]
 

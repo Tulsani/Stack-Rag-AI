@@ -148,4 +148,53 @@ The worker treats a file embedding job as replaceable/idempotent: inside one tra
 
 
 ### SAI-Query-Engine
-A query engine to handle UI Calls
+FastAPI service for querying chunks embedded into PostgreSQL/pgvector.
+
+#### Endpoints
+
+- `GET /health`
+- `POST /query`: semantic pgvector retrieval.
+- `POST /query/hybrid`: semantic pgvector retrieval plus PostgreSQL full-text keyword retrieval over `content_tsv`.
+
+#### Semantic Query
+
+```bash
+curl --location 'http://localhost:8000/query' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "question": "Is Akshat Tulsani a good fit for stackAI? Stack AI is building ai agents in healthcare and designing rag solutions ",
+    "top_k": 5
+  }'
+```
+
+#### Hybrid Query
+
+```bash
+curl --location 'http://localhost:8000/query/hybrid' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "question": "What does the uploaded document say about termination?",
+    "top_k": 5,
+    "semantic_weight": 0.65,
+    "keyword_weight": 0.35
+  }'
+```
+
+The keyword side uses `websearch_to_tsquery('english', question)` and `ts_rank_cd(content_tsv, query)`. The final result order is merged with reciprocal rank fusion.
+
+#### Run Locally
+
+```bash
+python -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+
+export MISTRAL_API_KEY=replace-me
+export POSTGRES_HOST=database-1.ckvcqmcakbxd.us-east-1.rds.amazonaws.com
+export POSTGRES_DB=sairag
+export POSTGRES_USER=postgres
+export POSTGRES_PASSWORD=replace-me
+export POSTGRES_SSLMODE=require
+
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```

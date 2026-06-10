@@ -8,7 +8,7 @@ from fastapi import FastAPI, HTTPException
 
 from .config import Settings
 from .mistral_client import MistralClient
-from .models import HealthResponse, QueryRequest, QueryResponse
+from .models import HealthResponse, HybridQueryRequest, QueryRequest, QueryResponse
 from .retrieval import ChunkRetriever
 from .service import QueryService
 
@@ -36,6 +36,15 @@ def query(request: QueryRequest) -> QueryResponse:
         return get_query_service().answer(request)
     except Exception as exc:
         logger.exception("Query failed")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/query/hybrid", response_model=QueryResponse)
+def hybrid_query(request: HybridQueryRequest) -> QueryResponse:
+    try:
+        return get_query_service().hybrid_answer(request)
+    except Exception as exc:
+        logger.exception("Hybrid query failed")
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
