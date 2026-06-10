@@ -1,8 +1,9 @@
 # Stack AI RAG App
 
-lets setup a v1 architecture implementation for the RAG app , this could evovle once we dive deeper
 
 ![system-architecture](./statics/Stack-RAG-system-architecture.png)
+
+Retrieval is implemented directly in application code and SQL. The project does not use LangChain, LlamaIndex, Haystack, a managed vector database, an external search library, or any external RAG framework.
 
 ### The implementation is split into independently scalalbale microservices
 -  Uploading service
@@ -10,7 +11,7 @@ lets setup a v1 architecture implementation for the RAG app , this could evovle 
 -  Embedding service
 -  Query Engine
 
-Note: the current ingestion endpoint is a serverless uploader instead of a FastAPI multipart endpoint. The query service itself is FastAPI. This split is intentional because large PDF bytes should go directly to object storage, while FastAPI remains focused on low-latency query traffic.
+
 
 ## System Overview
 
@@ -21,6 +22,8 @@ Note: the current ingestion endpoint is a serverless uploader instead of a FastA
 5. `SAI-Embedding-Service` consumes the completion event, embeds each chunk with Mistral embeddings, and stores chunk text, metadata, full-text search data, and embeddings in PostgreSQL.
 6. `SAI-Query-Engine` exposes FastAPI query endpoints. It plans the user query, decides whether retrieval is needed, rewrites retrieval queries, performs semantic or hybrid search, reranks/filters citations, and calls Mistral chat completion to generate a cited answer.
 7. The Angular UI calls the upload and query APIs so users can upload PDFs and chat with the knowledge base.
+
+Note: the current ingestion endpoint is a serverless uploader instead of a FastAPI multipart endpoint. The query service itself is FastAPI. This split is intentional because large PDF bytes should go directly to object storage, while FastAPI remains focused on low-latency query traffic.
 
 ## Design Considerations
 
