@@ -209,34 +209,19 @@ def _is_greeting(question: str) -> bool:
 
 def _merge_citation_lists(citation_lists: list[list[Citation]], top_k: int) -> list[Citation]:
     by_chunk_id: dict[str, Citation] = {}
-    scores: dict[str, float] = {}
-    hit_counts: dict[str, int] = {}
-    rrf_k = 60.0
 
     for citations in citation_lists:
-        for rank, citation in enumerate(citations, start=1):
+        for citation in citations:
             chunk_id = citation.chunk_id
-            scores[chunk_id] = scores.get(chunk_id, 0.0) + 1.0 / (rrf_k + rank)
-            hit_counts[chunk_id] = hit_counts.get(chunk_id, 0) + 1
             existing = by_chunk_id.get(chunk_id)
             if existing is None or _primary_score(citation) > _primary_score(existing):
                 by_chunk_id[chunk_id] = citation
 
-    ordered = sorted(
-        by_chunk_id.values(),
-        key=lambda citation: (scores[citation.chunk_id], hit_counts[citation.chunk_id], _primary_score(citation)),
-        reverse=True,
-    )
-
-    merged = []
-    for index, citation in enumerate(ordered[:top_k], start=1):
-        metadata = {
-            **citation.metadata,
-            "queryFusionScore": scores[citation.chunk_id],
-            "queryHitCount": hit_counts[citation.chunk_id],
-        }
-        merged.append(citation.model_copy(update={"citation_id": index, "metadata": metadata}))
-    return merged
+    ranked = sorted(by_chunk_id.values(), key=_primary_score, reverse=True)
+    return [
+        citation.model_copy(update={"citation_id": index})
+        for index, citation in enumerate(ranked[:top_k], start=1)
+    ]
 
 
 def _primary_score(citation: Citation) -> float:

@@ -193,6 +193,8 @@ Disable rewriting for debugging:
 }
 ```
 
+Post-processing is lightweight: results from the original question and rewritten queries are merged, duplicate chunks are removed by `chunk_id`, and candidates are reranked by the best available retrieval score before selecting the final `top_k`.
+
 #### Run Locally
 
 ```bash
@@ -201,9 +203,9 @@ python -m venv .venv
 pip install -r requirements.txt
 
 export MISTRAL_API_KEY=replace-me
-export POSTGRES_HOST=database-1.ckvcqmcakbxd.us-east-1.rds.amazonaws.com
-export POSTGRES_DB=sairag
-export POSTGRES_USER=postgres
+export POSTGRES_HOST=<db.name>
+export POSTGRES_DB=**
+export POSTGRES_USER=***
 export POSTGRES_PASSWORD=replace-me
 export POSTGRES_SSLMODE=require
 
