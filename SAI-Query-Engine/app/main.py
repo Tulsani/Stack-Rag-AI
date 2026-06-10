@@ -5,6 +5,7 @@ import os
 from functools import lru_cache
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
 from .config import Settings
 from .mistral_client import MistralClient
@@ -22,6 +23,14 @@ app = FastAPI(
     title="SAI Query Engine",
     version="0.1.0",
     description="FastAPI query endpoint for the Stack AI RAG pipeline.",
+)
+
+cors_origins = os.getenv("CORS_ORIGINS") or os.getenv("CORS_ORIGIN") or "*"
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[origin.strip() for origin in cors_origins.split(",") if origin.strip()],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
 )
 
 
