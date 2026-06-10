@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 
+from .hallucination import check_answer_citations
 from .mistral_client import MistralClient
 from .models import Citation, HybridQueryRequest, QueryPlan, QueryRequest, QueryResponse
 from .policy import evaluate_document_policy
@@ -96,6 +97,24 @@ class QueryService:
             context=build_context(usable_citations),
             answer_style=plan.answer_style,
         )
+        hallucination_check = check_answer_citations(
+            answer,
+            valid_citation_ids={citation.citation_id for citation in usable_citations},
+        )
+        if not hallucination_check.supported:
+            return QueryResponse(
+                answer="insufficient evidence",
+                used_retrieval=True,
+                insufficient_evidence=True,
+                citations=usable_citations,
+                rewritten_queries=rewritten_queries,
+                intent=plan.intent,
+                answer_style=plan.answer_style,
+                policy_warning=document_policy.warning,
+                hallucination_warning="unsupported_or_uncited_claims",
+                unsupported_claims=hallucination_check.unsupported_claims,
+            )
+
         insufficient = answer.strip().lower() == "insufficient evidence"
         return QueryResponse(
             answer=answer,
@@ -179,6 +198,24 @@ class QueryService:
             context=build_context(usable_citations),
             answer_style=plan.answer_style,
         )
+        hallucination_check = check_answer_citations(
+            answer,
+            valid_citation_ids={citation.citation_id for citation in usable_citations},
+        )
+        if not hallucination_check.supported:
+            return QueryResponse(
+                answer="insufficient evidence",
+                used_retrieval=True,
+                insufficient_evidence=True,
+                citations=usable_citations,
+                rewritten_queries=rewritten_queries,
+                intent=plan.intent,
+                answer_style=plan.answer_style,
+                policy_warning=document_policy.warning,
+                hallucination_warning="unsupported_or_uncited_claims",
+                unsupported_claims=hallucination_check.unsupported_claims,
+            )
+
         insufficient = answer.strip().lower() == "insufficient evidence"
         return QueryResponse(
             answer=answer,

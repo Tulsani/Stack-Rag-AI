@@ -208,7 +208,48 @@ The planner also selects an `answer_style`. The answer model uses that style to 
 
 The UI can parse these wrappers and render richer chat output while the raw answer remains part of the conversation history.
 
+#### Tag-Based Refusal Policy
+
+The query engine keeps refusal policy simple and metadata-driven. After retrieval, it checks citation metadata tags:
+
+- Tags like `pii`, `private`, `confidential`, `personal`, or `sensitive` refuse the answer.
+- Tags like `medical`, `health`, `clinical`, or `patient` allow the answer but return a medical disclaimer in `policy_warning`.
+- Tags like `legal`, `contract`, `nda`, or `agreement` allow the answer but return a legal disclaimer in `policy_warning`.
+
+Example:
+
+```json
+{
+  "policy_warning": "Legal/contract document: this is a document summary, not legal advice."
+}
+```
+
+
+#### Hallucination Check
+
+After answer generation, the API runs a deterministic citation check. Factual sentences must include a citation like `[1]`, and the citation id must exist in the returned citations. If the answer contains uncited or invalidly cited factual claims, the API returns `insufficient evidence` and includes the flagged sentences in `unsupported_claims`.
+
+```json
+{
+  "hallucination_warning": "unsupported_or_uncited_claims",
+  "unsupported_claims": ["The agreement renews automatically every year."]
+}
+```
+
+
 If no retrieved chunk clears `min_similarity`, the API returns:
+
+```json
+{
+  "answer": "insufficient evidence",
+  "used_retrieval": true,
+  "insufficient_evidence": true,
+  "citations": []
+}
+```
+
+
+
 
 #### Run Locally
 

@@ -46,6 +46,8 @@ class QueryResponse(BaseModel):
     intent: str | None = None
     answer_style: str | None = None
     policy_warning: str | None = None
+    hallucination_warning: str | None = None
+    unsupported_claims: list[str] = Field(default_factory=list)
 
 
 class QueryPlan(BaseModel):
