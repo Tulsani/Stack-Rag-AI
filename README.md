@@ -88,6 +88,8 @@ On file object being created on s3 , event notification is triggered and pushed 
 SQS acts as a buffer to not overwhelm the chunking service and allow it to scale based on incoming requests
 The Chunking-Service worker lives in `./SAI-Chunking-Service/app`:
 
+![chunking-service](./statics/Chunking-service.png)
+
 1. Listens to SQS events of S3 object being writed
 2. Pickups the S3 object from s3
 3. Uses the mistral API to OCR the object 
@@ -110,6 +112,9 @@ The Chunking-Service worker lives in `./SAI-Chunking-Service/app`:
 
 
 ### SAI-Embedding-Service
+
+![embedding-worker](./statics/Embedding-Worker.png)
+
 SQS-driven ECS worker that embeds chunk and stores them in PostgreSQL with pgvector. The SNS captures events of completion from chunking service and updates the SQS buffer
 
 1. `chunking-service` writes `chunks.json` to S3.
@@ -150,6 +155,8 @@ The worker treats a file embedding job as replaceable/idempotent: inside one tra
 
 ### SAI-Query-Engine
 FastAPI service for querying chunks embedded into PostgreSQL/pgvector.
+
+![query-engine](./statics/Query-Engine.png)
 
 #### Endpoints
 
