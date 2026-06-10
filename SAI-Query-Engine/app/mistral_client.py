@@ -44,18 +44,20 @@ class MistralClient:
         return embedding
 
     def answer(self, question: str, context: str, answer_style: str = "factual") -> str:
+        style_instructions = _answer_style_instructions(answer_style)
         payload = {
             "model": self.chat_model,
             "temperature": 0.1,
-            "max_tokens": 700,
+            "max_tokens": 1100,
             "messages": [
                 {
                     "role": "system",
                     "content": (
                         "You are a retrieval-augmented assistant. Answer using only the provided context. "
                         "Cite sources inline as [1], [2], etc. If the context does not contain enough "
-                        "evidence, say exactly: insufficient evidence. "
-                        f"Use this answer style when possible: {answer_style}."
+                        "evidence, say exactly: insufficient evidence. Do not include scripts, styles, "
+                        "event handlers, iframes, or external links in structured output. "
+                        f"{style_instructions}"
                     ),
                 },
                 {
@@ -84,12 +86,16 @@ class MistralClient:
                         "\"should_search\":true,"
                         "\"direct_answer\":null,"
                         "\"rewritten_queries\":[\"query one\"],"
-                        "\"answer_style\":\"factual|summary|list|table|comparison|conversational\"}.\n"
+                        "\"answer_style\":\"factual|summary|list|table|chart|comparison|conversational\"}.\n"
                         "Rules: should_search=false for greetings, small talk, capability questions, "
                         "unrelated general knowledge, or unsafe/sensitive requests. should_search=true only "
                         "when the user asks about uploaded documents or likely document contents. Generate up "
-                        "to the requested number of concise retrieval queries. Do not answer knowledge-base "
-                        "questions directly."
+                        "to the requested number of concise retrieval queries. Choose answer_style=table when "
+                        "the user asks for tabular output, columns, matrices, or comparisons with fields. "
+                        "Choose answer_style=list for bullets, steps, pros/cons, requirements, or obligations. "
+                        "Choose answer_style=chart only when the user explicitly asks for a chart, graph, trend, "
+                        "breakdown, or distribution and the context contains chartable values. Do not answer "
+                        "knowledge-base questions directly."
                     ),
                 },
                 {
@@ -216,3 +222,38 @@ def _clean_rewrites(question: str, queries: Any, max_rewrites: int) -> list[str]
         if len(rewrites) >= max_rewrites:
             break
     return rewrites
+
+
+def _answer_style_instructions(answer_style: str) -> str:
+    normalized = answer_style.lower().strip()
+    if normalized == "list":
+        return (
+            "Return a brief lead sentence, then a structured list wrapped exactly in "
+            "<rag-output-list><ul>...</ul></rag-output-list>. Use only <ul>, <ol>, <li>, "
+            "<strong>, and <em> tags inside the wrapper. Include citations inside list items."
+        )
+    if normalized == "table":
+        return (
+            "Return a brief lead sentence, then a structured table wrapped exactly in "
+            "<rag-output-table><table>...</table></rag-output-table>. Use only <table>, "
+            "<thead>, <tbody>, <tr>, <th>, and <td> tags inside the wrapper. Include citations "
+            "inside relevant cells. If the context does not support a table, answer in factual prose."
+        )
+    if normalized == "chart":
+        return (
+            "Return a brief lead sentence, then a chart spec wrapped exactly in "
+            "<rag-output-chart>{...}</rag-output-chart>. The content must be valid JSON with keys: "
+            "chartType, title, labels, series, and citations. Use chartType values like bar, line, "
+            "or pie. Only create a chart when the context contains numeric or categorical data; "
+            "otherwise answer in factual prose."
+        )
+    if normalized == "summary":
+        return "Return a concise summary with 3-5 evidence-backed bullets and citations."
+    if normalized == "comparison":
+        return (
+            "Compare the items directly. Prefer a compact table if there are multiple comparable "
+            "attributes, otherwise use concise paragraphs with citations."
+        )
+    if normalized == "conversational":
+        return "Return a short conversational response. Do not use structured output wrappers."
+    return "Return a concise factual answer with citations."

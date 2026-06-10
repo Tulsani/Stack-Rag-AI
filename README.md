@@ -195,6 +195,21 @@ Disable rewriting for debugging:
 
 Post-processing is lightweight: results from the original question and rewritten queries are merged, duplicate chunks are removed by `chunk_id`, and candidates are reranked by the best available retrieval score before selecting the final `top_k`.
 
+#### Answer Shaping
+
+The planner also selects an `answer_style`. The answer model uses that style to shape the final response:
+
+- `factual`: concise prose with citations.
+- `summary`: short evidence-backed bullets.
+- `list`: wraps a safe HTML list in `<rag-output-list>...</rag-output-list>`.
+- `table`: wraps a safe HTML table in `<rag-output-table>...</rag-output-table>`.
+- `chart`: wraps a JSON chart spec in `<rag-output-chart>...</rag-output-chart>`.
+- `comparison`: compares entities directly, often as a compact table when supported by context.
+
+The UI can parse these wrappers and render richer chat output while the raw answer remains part of the conversation history.
+
+If no retrieved chunk clears `min_similarity`, the API returns:
+
 #### Run Locally
 
 ```bash
