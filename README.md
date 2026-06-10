@@ -10,6 +10,7 @@ lets setup a v1 architecture implementation for the RAG app , this could evovle 
 -  Embedding service
 -  Query Engine
 
+Note: the current ingestion endpoint is a serverless uploader instead of a FastAPI multipart endpoint. The query service itself is FastAPI. This split is intentional because large PDF bytes should go directly to object storage, while FastAPI remains focused on low-latency query traffic.
 
 ### SAI-DocUploader
 A serverless uploader to push files to object store (S3 for our case).
@@ -251,19 +252,80 @@ If no retrieved chunk clears `min_similarity`, the API returns:
 
 
 
+#### Security and Scalability Notes
+
+- All documents are uploaded and previewed from S3 via pre-signed URLs, there is no service has open access to the documents
+- API keys and database credentials are read from AWS Secret Manager which would allow rotation on fly.
+- Retrieval can be scoped by `client_id` and `file_id`.
+- PII/private document tags block answers after retrieval specific tags can prevent leakage of private information.
+- Medical and legal tags return warnings instead of pretending to provide professional advice.
+- SQS decouples slow OCR/embedding work from user-facing requests.
+- Chunking and embedding workers are idempotent around `file_id`, so retries are safe.
+
+
+#### Libraries and Software
+
+- [FastAPI](https://fastapi.tiangolo.com/) for query APIs
+- [Mistral AI API](https://docs.mistral.ai/) for OCR, embeddings, query planning, rewriting, and answer generation
+- [PostgreSQL](https://www.postgresql.org/) for chunk storage and keyword search
+- [pgvector](https://github.com/pgvector/pgvector) for vector similarity inside PostgreSQL
+- [psycopg](https://www.psycopg.org/psycopg3/) for PostgreSQL access
+- [httpx](https://www.python-httpx.org/) for Mistral HTTP calls
+- [Pydantic](https://docs.pydantic.dev/) for request/response validation
+- [AWS S3](https://aws.amazon.com/s3/), [SQS](https://aws.amazon.com/sqs/), and [SNS](https://aws.amazon.com/sns/) for object storage and event-driven workers
+- [Angular](https://angular.dev/) for the chat and document UI
+
+
 #### Run Locally
 
+- Query Engine
+
 ```bash
+cd SAI-Query-Engine
 python -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
 
 export MISTRAL_API_KEY=replace-me
-export POSTGRES_HOST=<db.name>
-export POSTGRES_DB=**
-export POSTGRES_USER=***
+export POSTGRES_HOST=replace-me
+export POSTGRES_DB=replace-me
+export POSTGRES_USER=replace-me
 export POSTGRES_PASSWORD=replace-me
 export POSTGRES_SSLMODE=require
 
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+- Chunking Worker
+
+```bash
+cd SAI-Chunking-Service
+python -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+
+export MISTRAL_API_KEY=replace-me
+export CHUNKING_QUEUE_URL=replace-me
+export CHUNK_OUTPUT_BUCKET=replace-me
+export CHUNK_COMPLETE_TOPIC_ARN=replace-me
+
+python -m app.worker
+```
+
+- Embedding Worker
+
+```bash
+cd SAI-Embedding-Service
+python -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+
+export MISTRAL_API_KEY=replace-me
+export EMBEDDING_QUEUE_URL=replace-me
+export POSTGRES_HOST=replace-me
+export POSTGRES_DB=replace-me
+export POSTGRES_USER=replace-me
+export POSTGRES_PASSWORD=replace-me
+
+python -m app.worker
 ```
