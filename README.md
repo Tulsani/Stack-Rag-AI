@@ -15,7 +15,7 @@ Retrieval is implemented directly in application code and SQL. The project does 
 
 ## System Overview
 
-1. A client uploads PDF metadata to `SAI-docUploader` and receives a pre-signed S3 URL.
+1. A client uploads PDF metadata to `SAI-Ingestion-Service` and receives a pre-signed S3 URL.
 2. The client uploads the PDF bytes directly to S3.
 3. S3 object-created events are buffered through SQS for the chunking service.
 4. `SAI-Chunking-Service` downloads the PDF, extracts text with Mistral OCR, chunks the extracted text, writes a chunk artifact to S3, and publishes a completion event.
@@ -23,7 +23,7 @@ Retrieval is implemented directly in application code and SQL. The project does 
 6. `SAI-Query-Engine` exposes FastAPI query endpoints. It plans the user query, decides whether retrieval is needed, rewrites retrieval queries, performs semantic or hybrid search, reranks/filters citations, and calls Mistral chat completion to generate a cited answer.
 7. The Angular UI calls the upload and query APIs so users can upload PDFs and chat with the knowledge base.
 
-Note: the current ingestion endpoint is a serverless uploader instead of a FastAPI multipart endpoint. The query service itself is FastAPI. This split is intentional because large PDF bytes should go directly to object storage, while FastAPI remains focused on low-latency query traffic.
+Note: the current ingestion endpoint is a FastAPI pre-signed URL issuer instead of a multipart file proxy. This split is intentional because large PDF bytes should go directly to object storage, while FastAPI remains focused on metadata validation and upload registration.
 
 ## Design Considerations
 
@@ -151,18 +151,18 @@ The query response schema also supports `hallucination_warning` and `unsupported
 
 ## Services
 
-### SAI-DocUploader
-A serverless uploader to push files to object store (S3 for our case).
-Endpoint: https://v7rl17dgv1.execute-api.us-east-1.amazonaws.com/default/SAI-docUploader
+### SAI-Ingestion-Service
+A FastAPI uploader service to push files to object store (S3 for our case) through pre-signed URLs.
+Endpoint: http://sai-query-alb-176439024.us-east-1.elb.amazonaws.com/ingestion/upload
 
 #### Upload workflow
-1. POST metadata to the uploader endpoint.
+1. POST metadata to `/ingestion/upload`.
 2. Receive a pre-signed S3 upload URL in the response.
 3. PUT the document to S3 using the returned `uploadUrl`.
 
 #### Example metadata request
 ```bash
-curl --location --request POST 'https://v7rl17dgv1.execute-api.us-east-1.amazonaws.com/default/SAI-docUploader' \
+curl --location --request POST 'http://sai-query-alb-176439024.us-east-1.elb.amazonaws.com/ingestion/upload' \
   --header 'content-type: application/pdf' \
   --header 'x-doc-filename: acme-nda-v1.pdf' \
   --header 'x-doc-file-size: 204800' \
