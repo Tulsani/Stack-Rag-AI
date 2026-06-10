@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from .hallucination import check_answer_citations
+from .hallucination import check_answer_citations ## halucination checks are too regress need soften
 from .mistral_client import MistralClient
 from .models import Citation, HybridQueryRequest, QueryPlan, QueryRequest, QueryResponse
 from .policy import evaluate_document_policy
