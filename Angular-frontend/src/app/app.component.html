@@ -1,0 +1,45 @@
+<main class="app-shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark">SAI</span>
+      <div>
+        <h1>{{ appName }}</h1>
+        <p>USER0001</p>
+      </div>
+    </div>
+
+    <nav class="nav-list" aria-label="Primary">
+      <a routerLink="/library" routerLinkActive="active">Doc Library</a>
+      <a routerLink="/upload" routerLinkActive="active">Upload Document</a>
+    </nav>
+
+    <button class="ghost-button api-key-button" type="button" *ngIf="hasApiKey" (click)="changeApiKey()">
+      Change API key
+    </button>
+  </aside>
+
+  <section class="content-panel">
+    <router-outlet *ngIf="hasApiKey" />
+  </section>
+</main>
+
+<section class="api-key-overlay" *ngIf="!hasApiKey" role="dialog" aria-modal="true" aria-labelledby="api-key-title">
+  <form class="api-key-modal" (ngSubmit)="saveApiKey()">
+    <h2 id="api-key-title">API key required</h2>
+    <p>Enter the shared API key to use the document workbench.</p>
+
+    <label for="api-key-input">API key</label>
+    <input
+      id="api-key-input"
+      name="apiKey"
+      type="password"
+      autocomplete="off"
+      [(ngModel)]="apiKeyInput"
+      autofocus
+    />
+
+    <p class="api-key-error" *ngIf="apiKeyError">{{ apiKeyError }}</p>
+
+    <button class="primary-button" type="submit">Continue</button>
+  </form>
+</section>

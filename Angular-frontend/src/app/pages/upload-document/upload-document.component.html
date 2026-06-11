@@ -1,0 +1,128 @@
+<header class="page-header">
+  <div>
+    <h2>Upload Document</h2>
+    <p>Register metadata, upload to the presigned S3 URL, and keep userId fixed to USER0001.</p>
+  </div>
+</header>
+
+<form class="upload-grid" (ngSubmit)="upload()">
+  <section class="panel upload-card">
+    <div class="file-drop">
+      <input
+        id="document-file"
+        type="file"
+        [accept]="acceptedMimeTypes"
+        (change)="onFileSelected($event)"
+      />
+      <label for="document-file">
+        <span class="file-title">{{ selectedFile?.name || 'Choose document' }}</span>
+        <span class="file-meta">
+          {{ selectedFile ? (selectedFile.size | number) + ' bytes' : 'PDF, Office, image, text, or CSV' }}
+        </span>
+      </label>
+    </div>
+
+    <div class="form-grid two">
+      <div class="field">
+        <label for="client-id">Client ID</label>
+        <input id="client-id" name="clientId" [(ngModel)]="metadata.clientId" required />
+      </div>
+
+      <div class="field">
+        <label for="user-id">User ID</label>
+        <input id="user-id" name="userId" [ngModel]="fixedUserId" disabled />
+      </div>
+
+      <div class="field">
+        <label for="file-type">File Type</label>
+        <input id="file-type" name="fileType" [(ngModel)]="metadata.fileType" required />
+      </div>
+
+      <div class="field">
+        <label for="file-sub-type">File Sub Type</label>
+        <input id="file-sub-type" name="fileSubType" [(ngModel)]="metadata.fileSubType" />
+      </div>
+
+      <div class="field">
+        <label for="doc-type">Document Type</label>
+        <select id="doc-type" name="docType" [(ngModel)]="metadata.docType">
+          <option value="unstructured">unstructured</option>
+          <option value="structured">structured</option>
+          <option value="semi-structured">semi-structured</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="stage">Stage</label>
+        <input id="stage" name="stage" [(ngModel)]="metadata.stage" />
+      </div>
+
+      <div class="field">
+        <label for="parent-folder">Parent Folder</label>
+        <input id="parent-folder" name="parentFolder" [(ngModel)]="metadata.parentFolder" placeholder="deals/2026/q2" />
+      </div>
+
+      <div class="field">
+        <label for="uploaded-by">Uploaded By</label>
+        <input id="uploaded-by" name="uploadedBy" [(ngModel)]="metadata.uploadedBy" />
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="description">Description</label>
+      <textarea id="description" name="description" [(ngModel)]="metadata.description"></textarea>
+    </div>
+
+    <label class="toggle-row">
+      <input type="checkbox" name="linked" [(ngModel)]="metadata.linked" />
+      <span>Linked</span>
+    </label>
+  </section>
+
+  <section class="panel tags-card">
+    <div class="section-title">
+      <h3>Metadata Tags</h3>
+      <button class="ghost-button" type="button" (click)="addTag()">Add Tag</button>
+    </div>
+
+    <div class="tag-list">
+      <div class="tag-row" *ngFor="let tag of metadata.tags; let index = index">
+        <div class="field">
+          <label [for]="'tag-key-' + index">Key</label>
+          <input [id]="'tag-key-' + index" [name]="'tagKey' + index" [(ngModel)]="tag.key" />
+        </div>
+
+        <div class="field">
+          <label [for]="'tag-value-' + index">Value</label>
+          <input [id]="'tag-value-' + index" [name]="'tagValue' + index" [(ngModel)]="tag.value" />
+        </div>
+
+        <button
+          class="icon-button"
+          type="button"
+          title="Remove tag"
+          aria-label="Remove tag"
+          (click)="removeTag(index)"
+        >
+          x
+        </button>
+      </div>
+    </div>
+
+    <div class="preset-row" aria-label="Tag presets">
+      <button class="ghost-button" type="button" (click)="addPresetTag('searchable', 'false')">Unsearchable</button>
+      <button class="ghost-button" type="button" (click)="addPresetTag('confidential', 'true')">Confidential</button>
+      <button class="ghost-button" type="button" (click)="addPresetTag('legal', 'true')">Legal</button>
+      <button class="ghost-button" type="button" (click)="addPresetTag('medical', 'true')">Medical</button>
+    </div>
+
+    <footer class="action-row">
+      <span class="status-line" [class.error]="statusType === 'error'" [class.success]="statusType === 'success'">
+        {{ statusMessage }}
+      </span>
+      <button class="primary-button" type="submit" [disabled]="isUploading">
+        {{ isUploading ? 'Uploading...' : 'Upload' }}
+      </button>
+    </footer>
+  </section>
+</form>

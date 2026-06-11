@@ -1,0 +1,44 @@
+{
+  "family": "sai-ingestion-service",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "256",
+  "memory": "512",
+  "executionRoleArn": "arn:aws:iam::453875231722:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::453875231722:role/saiIngestionServiceTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "sai-ingestion-service",
+      "image": "453875231722.dkr.ecr.us-east-1.amazonaws.com/sai-ingestion-service:latest",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "hostPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        { "name": "UPLOAD_BUCKET", "value": "sai-rag-upload-bucket" },
+        { "name": "DOCUMENTS_TABLE", "value": "sai-docLibrary" },
+        { "name": "PRESIGN_EXPIRY_SECONDS", "value": "900" },
+        { "name": "CORS_ORIGINS", "value": "*" },
+        { "name": "LOG_LEVEL", "value": "INFO" }
+      ],
+      "secrets": [
+        {
+          "name": "API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:453875231722:secret:sai/app/api-key"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/sai-ingestion-service",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}
