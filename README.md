@@ -5,7 +5,7 @@
 
 Retrieval is implemented directly in application code and SQL. The project does not use LangChain, LlamaIndex, Haystack, a managed vector database, an external search library, or any external RAG framework.
 
-### The implementation is split into independently scalalbale microservices
+### The implementation is split into independently scalable microservices
 -  Uploading service
 -  Chunking service
 -  Embedding service
@@ -21,10 +21,6 @@ TLDR; Version
 6. Retrieval combines semantic vector search with PostgreSQL keyword search. Results are deduplicated,reranked,and filtered by a minimum similarity threshold. If retrieved chunks do not provide enough evidence, the API returns `insufficient evidence` instead of guessing. Also applies metadata-based refusal and disclaimer policies for sensitive, legal, and medical documents
 7. Before running retrieval, the query engine builds a query plan for the user message. It detects the user’s intent, decides whether a knowledge-base search is actually needed, rewrites the query into better `retrieval-friendly variants`, and selects the expected answer style such as `factual-answer`, `summary`, `table`, `chart`, `comparison`, or `normal-conversation`. 
 8. The UI exposes upload and query workflows through a chat interface, using a sliding window of the previous three messages for lightweight conversation continuity.
-
-
-
-
 
 ## System Overview
 
