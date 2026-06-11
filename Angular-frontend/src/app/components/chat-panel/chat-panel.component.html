@@ -1,0 +1,111 @@
+<aside class="panel chat-panel">
+  <header class="chat-header">
+    <div>
+      <h3>Chat</h3>
+      <p>{{ searchScope === 'selected' ? selectedFiles.length + ' selected' : 'All files' }}</p>
+    </div>
+    <div class="chat-header-actions">
+      <button class="ghost-button" type="button" (click)="clearSession()">Clear</button>
+      <button
+        class="icon-button"
+        type="button"
+        aria-label="Close chat"
+        title="Close chat"
+        (click)="closed.emit()"
+      >
+        x
+      </button>
+    </div>
+  </header>
+
+  <section class="chat-controls">
+    <div class="segmented" aria-label="Query mode">
+      <button type="button" [class.active]="queryMode === 'hybrid'" (click)="queryMode = 'hybrid'">Hybrid</button>
+      <button type="button" [class.active]="queryMode === 'semantic'" (click)="queryMode = 'semantic'">Semantic</button>
+    </div>
+
+    <div class="segmented" aria-label="Search scope">
+      <button type="button" [class.active]="searchScope === 'all'" (click)="searchScope = 'all'">All</button>
+      <button
+        type="button"
+        [class.active]="searchScope === 'selected'"
+        [disabled]="!canUseSelectedScope"
+        (click)="searchScope = 'selected'"
+      >
+        Selected
+      </button>
+    </div>
+
+    <div class="compact-grid">
+      <label>
+        <span>Top K</span>
+        <input type="number" min="1" max="20" [(ngModel)]="topK" />
+      </label>
+
+      <label>
+        <span>Min Similarity</span>
+        <input type="number" min="0" max="1" step="0.05" [(ngModel)]="minSimilarity" />
+      </label>
+    </div>
+
+    <div class="compact-grid" *ngIf="queryMode === 'hybrid'">
+      <label>
+        <span>Semantic</span>
+        <input type="number" min="0" max="1" step="0.05" [(ngModel)]="semanticWeight" />
+      </label>
+
+      <label>
+        <span>Keyword</span>
+        <input type="number" min="0" max="1" step="0.05" [(ngModel)]="keywordWeight" />
+      </label>
+    </div>
+
+    <div class="toggle-grid">
+      <label><input type="checkbox" [(ngModel)]="useQueryPlanner" /> Planner</label>
+      <label><input type="checkbox" [(ngModel)]="useQueryRewrite" /> Rewrite</label>
+    </div>
+  </section>
+
+  <section class="message-list">
+    <article class="message" [class.user]="message.role === 'user'" *ngFor="let message of messages">
+      <div class="message-body" [innerHTML]="message.renderedAnswer || message.text"></div>
+
+      <ng-container *ngIf="message.responses?.length">
+        <div class="warning-list" *ngFor="let response of message.responses">
+          <span *ngIf="response.policy_warning">{{ response.policy_warning }}</span>
+          <span *ngIf="response.hallucination_warning">{{ response.hallucination_warning }}</span>
+          <span *ngIf="response.insufficient_evidence">insufficient evidence</span>
+        </div>
+
+        <details class="issue-block" *ngFor="let response of message.responses">
+          <summary *ngIf="response.unsupported_claims.length">Unsupported claims</summary>
+          <ul *ngIf="response.unsupported_claims.length">
+            <li *ngFor="let claim of response.unsupported_claims">{{ claim }}</li>
+          </ul>
+        </details>
+
+        <details class="citation-block">
+          <summary>Citations</summary>
+          <ol>
+            <li *ngFor="let response of message.responses">
+              <span *ngFor="let citation of response.citations">
+                [{{ citation.citation_id }}] {{ citation.filename }}
+                <small>chunk {{ citation.chunk_index }}</small>
+              </span>
+            </li>
+          </ol>
+        </details>
+      </ng-container>
+    </article>
+  </section>
+
+  <form class="composer" (ngSubmit)="send()">
+    <textarea name="question" [(ngModel)]="question" placeholder="Ask a question"></textarea>
+    <div class="composer-footer">
+      <span class="status-line" [class.error]="statusType === 'error'">{{ statusMessage }}</span>
+      <button class="primary-button" type="submit" [disabled]="isSending">
+        {{ isSending ? 'Sending...' : 'Send' }}
+      </button>
+    </div>
+  </form>
+</aside>

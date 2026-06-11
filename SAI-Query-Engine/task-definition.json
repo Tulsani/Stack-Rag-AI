@@ -1,0 +1,58 @@
+{
+  "family": "sai-query-engine",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::453875231722:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::453875231722:role/saiQueryEngineTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "sai-query-engine",
+      "image": "453875231722.dkr.ecr.us-east-1.amazonaws.com/sai-query-engine:latest",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "hostPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        { "name": "MISTRAL_EMBED_MODEL", "value": "mistral-embed" },
+        { "name": "MISTRAL_CHAT_MODEL", "value": "mistral-small-latest" },
+        { "name": "EMBEDDING_DIMENSION", "value": "1024" },
+        { "name": "POSTGRES_HOST", "value": "database-1.ckvcqmcakbxd.us-east-1.rds.amazonaws.com" },
+        { "name": "POSTGRES_PORT", "value": "5432" },
+        { "name": "POSTGRES_DB", "value": "sairag" },
+        { "name": "POSTGRES_USER", "value": "postgres" },
+        { "name": "POSTGRES_SSLMODE", "value": "require" },
+        { "name": "DEFAULT_TOP_K", "value": "5" },
+        { "name": "MIN_SIMILARITY", "value": "0.2" },
+        { "name": "LOG_LEVEL", "value": "INFO" }
+      ],
+      "secrets": [
+        {
+          "name": "API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:453875231722:secret:sai/app/api-key"
+        },
+        {
+          "name": "MISTRAL_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:453875231722:secret:sai/mistral/api-key"
+        },
+        {
+          "name": "POSTGRES_PASSWORD",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:453875231722:secret:sai/rds/postgres-password"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/sai-query-engine",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs"
+        }
+      }
+    }
+  ]
+}

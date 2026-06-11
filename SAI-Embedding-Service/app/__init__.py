@@ -1,0 +1,1 @@
+"""SQS-driven embedding worker."""
