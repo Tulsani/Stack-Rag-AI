@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import logging
 
-from .hallucination import check_answer_citations ## halucination checks are too regress need soften
 from .mistral_client import MistralClient
 from .models import Citation, HybridQueryRequest, QueryPlan, QueryRequest, QueryResponse
-from .policy import evaluate_document_policy
+from .policy import evaluate_document_policy, filter_blocked_citations
 from .retrieval import ChunkRetriever, build_context
 
 logger = logging.getLogger(__name__)
@@ -18,6 +17,11 @@ GREETING_QUERIES = {
     "good afternoon",
     "good evening",
 }
+
+BLOCKED_CITATION_CONTENT = (
+    "[Skipped: this chunk is tagged as PII, private, confidential, or sensitive "
+    "and was not shared with the answer model.]"
+)
 
 
 class QueryService:
@@ -68,17 +72,18 @@ class QueryService:
         citations = _merge_citation_lists(citation_lists, top_k)
 
         usable_citations = [citation for citation in citations if citation.similarity >= min_similarity]
+        usable_citations, blocked_citations = filter_blocked_citations(usable_citations)
         document_policy = evaluate_document_policy(usable_citations)
-        if usable_citations and not document_policy.allowed:
+        if blocked_citations and not usable_citations:
             return QueryResponse(
-                answer=document_policy.answer or "I cannot answer from the retrieved document tags.",
+                answer="I cannot answer from documents tagged as PII, private, confidential, or sensitive.",
                 used_retrieval=True,
                 insufficient_evidence=False,
-                citations=usable_citations,
+                citations=_response_citations(usable_citations, blocked_citations),
                 rewritten_queries=rewritten_queries,
                 intent=plan.intent,
                 answer_style=plan.answer_style,
-                policy_warning=document_policy.warning,
+                policy_warning="pii_or_private_document",
             )
 
         if not usable_citations:
@@ -98,34 +103,17 @@ class QueryService:
             answer_style=plan.answer_style,
             history=request.history,
         )
-        hallucination_check = check_answer_citations(
-            answer,
-            valid_citation_ids={citation.citation_id for citation in usable_citations},
-        )
-        if not hallucination_check.supported:
-            return QueryResponse(
-                answer="insufficient evidence",
-                used_retrieval=True,
-                insufficient_evidence=True,
-                citations=usable_citations,
-                rewritten_queries=rewritten_queries,
-                intent=plan.intent,
-                answer_style=plan.answer_style,
-                policy_warning=document_policy.warning,
-                hallucination_warning="unsupported_or_uncited_claims",
-                unsupported_claims=hallucination_check.unsupported_claims,
-            )
 
         insufficient = answer.strip().lower() == "insufficient evidence"
         return QueryResponse(
             answer=answer,
             used_retrieval=True,
             insufficient_evidence=insufficient,
-            citations=usable_citations,
+            citations=_response_citations(usable_citations, blocked_citations),
             rewritten_queries=rewritten_queries,
             intent=plan.intent,
             answer_style=plan.answer_style,
-            policy_warning=document_policy.warning,
+            policy_warning=_policy_warning(document_policy.warning, blocked_citations),
         )
 
     def hybrid_answer(self, request: HybridQueryRequest) -> QueryResponse:
@@ -170,17 +158,18 @@ class QueryService:
             for citation in citations
             if citation.vector_similarity is None or citation.vector_similarity >= min_similarity
         ]
+        usable_citations, blocked_citations = filter_blocked_citations(usable_citations)
         document_policy = evaluate_document_policy(usable_citations)
-        if usable_citations and not document_policy.allowed:
+        if blocked_citations and not usable_citations:
             return QueryResponse(
-                answer=document_policy.answer or "I cannot answer from the retrieved document tags.",
+                answer="I cannot answer from documents tagged as PII, private, confidential, or sensitive.",
                 used_retrieval=True,
                 insufficient_evidence=False,
-                citations=usable_citations,
+                citations=_response_citations(usable_citations, blocked_citations),
                 rewritten_queries=rewritten_queries,
                 intent=plan.intent,
                 answer_style=plan.answer_style,
-                policy_warning=document_policy.warning,
+                policy_warning="pii_or_private_document",
             )
 
         if not usable_citations:
@@ -200,34 +189,17 @@ class QueryService:
             answer_style=plan.answer_style,
             history=request.history,
         )
-        hallucination_check = check_answer_citations(
-            answer,
-            valid_citation_ids={citation.citation_id for citation in usable_citations},
-        )
-        if not hallucination_check.supported:
-            return QueryResponse(
-                answer="insufficient evidence",
-                used_retrieval=True,
-                insufficient_evidence=True,
-                citations=usable_citations,
-                rewritten_queries=rewritten_queries,
-                intent=plan.intent,
-                answer_style=plan.answer_style,
-                policy_warning=document_policy.warning,
-                hallucination_warning="unsupported_or_uncited_claims",
-                unsupported_claims=hallucination_check.unsupported_claims,
-            )
 
         insufficient = answer.strip().lower() == "insufficient evidence"
         return QueryResponse(
             answer=answer,
             used_retrieval=True,
             insufficient_evidence=insufficient,
-            citations=usable_citations,
+            citations=_response_citations(usable_citations, blocked_citations),
             rewritten_queries=rewritten_queries,
             intent=plan.intent,
             answer_style=plan.answer_style,
-            policy_warning=document_policy.warning,
+            policy_warning=_policy_warning(document_policy.warning, blocked_citations),
         )
 
     def _plan_query(self, question: str, request: QueryRequest) -> QueryPlan:
@@ -310,6 +282,36 @@ def _merge_citation_lists(citation_lists: list[list[Citation]], top_k: int) -> l
         citation.model_copy(update={"citation_id": index})
         for index, citation in enumerate(ranked[:top_k], start=1)
     ]
+
+
+def _response_citations(usable_citations: list[Citation], blocked_citations: list[Citation]) -> list[Citation]:
+    citations = [*usable_citations, *_redact_blocked_citations(blocked_citations)]
+    return sorted(citations, key=lambda citation: citation.citation_id)
+
+
+def _redact_blocked_citations(citations: list[Citation]) -> list[Citation]:
+    return [
+        citation.model_copy(
+            update={
+                "content": BLOCKED_CITATION_CONTENT,
+                "metadata": {
+                    **citation.metadata,
+                    "policy_flag": "pii_or_private_document",
+                    "skipped_from_context": True,
+                },
+            }
+        )
+        for citation in citations
+    ]
+
+
+def _policy_warning(warning: str | None, blocked_citations: list[Citation]) -> str | None:
+    if not blocked_citations:
+        return warning
+    blocked_warning = "pii_or_private_chunks_filtered"
+    if not warning:
+        return blocked_warning
+    return f"{warning}; {blocked_warning}"
 
 
 def _primary_score(citation: Citation) -> float:

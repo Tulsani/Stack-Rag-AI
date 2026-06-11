@@ -44,6 +44,21 @@ def evaluate_document_policy(citations: list[Citation]) -> PolicyDecision:
     return PolicyDecision(allowed=True)
 
 
+def filter_blocked_citations(citations: list[Citation]) -> tuple[list[Citation], list[Citation]]:
+    allowed = []
+    blocked = []
+    for citation in citations:
+        if is_blocked_citation(citation):
+            blocked.append(citation)
+        else:
+            allowed.append(citation)
+    return allowed, blocked
+
+
+def is_blocked_citation(citation: Citation) -> bool:
+    return bool(_metadata_tag_terms(citation.metadata) & PII_TAGS)
+
+
 def _metadata_tag_terms(metadata: dict[str, Any]) -> set[str]:
     raw_tags = metadata.get("tags") or metadata.get("tag") or []
     if isinstance(raw_tags, str):
