@@ -11,6 +11,17 @@ Retrieval is implemented directly in application code and SQL. The project does 
 -  Embedding service
 -  Query Engine
 
+TLDR; Version
+
+1. The system is implemented as four independently containerized FastAPI microservices on ECS: ingestion, chunking, embedding, and query engine. Each service can scale independently based on its workload.
+2. The ingestion service validates document metadata and generates a pre-signed S3 URL. Users upload PDFs directly to S3, keeping large file transfer out of FastAPI and making uploads easier to scale.
+3. S3 object-created events are pushed to SQS. The chunking service consumes from SQS, uses Mistral OCR to extract PDF text, preserves page/paragraph structure where possible, creates overlapping chunks, and stores chunk artifacts in S3.
+4. The embedding service listens for chunking completion events through SNS. It generates Mistral embeddings and stores vectors, text, metadata, and `content_tsv` in PostgreSQL with `pgvector`.
+5. The query engine exposes semantic and hybrid query endpoints. It classifies intent, decides whether retrieval is needed, chooses an answer format, and rewrites the query for better retrieval.
+6. Retrieval combines semantic vector search with PostgreSQL keyword search. Results are deduplicated,reranked,and filtered by a minimum similarity threshold. If retrieved chunks do not provide enough evidence, the API returns `insufficient evidence` instead of guessing. Also applies metadata-based refusal and disclaimer policies for sensitive, legal, and medical documents
+7. Before running retrieval, the query engine builds a query plan for the user message. It detects the user’s intent, decides whether a knowledge-base search is actually needed, rewrites the query into better `retrieval-friendly variants`, and selects the expected answer style such as `factual-answer`, `summary`, `table`, `chart`, `comparison`, or `normal-conversation`. 
+8. The UI exposes upload and query workflows through a chat interface, using a sliding window of the previous three messages for lightweight conversation continuity.
+
 
 
 
