@@ -13,6 +13,8 @@ Retrieval is implemented directly in application code and SQL. The project does 
 
 
 
+
+
 ## System Overview
 
 1. A client uploads PDF metadata to `SAI-Ingestion-Service` and receives a pre-signed S3 URL.
