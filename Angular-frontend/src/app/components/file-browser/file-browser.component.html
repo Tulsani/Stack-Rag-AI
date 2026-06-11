@@ -1,0 +1,82 @@
+<section class="panel browser-panel">
+  <div class="browser-toolbar">
+    <div class="breadcrumbs" *ngIf="folderResponse?.breadcrumbs?.length">
+      <button
+        class="breadcrumb"
+        type="button"
+        *ngFor="let crumb of folderResponse?.breadcrumbs"
+        (click)="folderChanged.emit(crumb.path)"
+      >
+        {{ crumb.name }}
+      </button>
+    </div>
+
+    <span class="scan-note" *ngIf="folderResponse?.scanned?.note">{{ folderResponse?.scanned?.note }}</span>
+  </div>
+
+  <div class="loading-state" *ngIf="isLoading">Loading documents...</div>
+
+  <div class="folder-grid" *ngIf="!isLoading && (folderResponse?.folders?.length || 0) > 0">
+    <button
+      class="folder-tile"
+      type="button"
+      *ngFor="let folder of folderResponse?.folders"
+      (click)="folderChanged.emit(folder.path)"
+    >
+      <span class="folder-icon">▣</span>
+      <span>{{ folder.name }}</span>
+      <small>{{ folder.fileCount }} files</small>
+    </button>
+  </div>
+
+  <div class="file-table-wrap" *ngIf="!isLoading">
+    <table class="file-table">
+      <thead>
+        <tr>
+          <th class="select-col">
+            <input
+              type="checkbox"
+              [checked]="allCurrentFilesSelected"
+              (change)="toggleCurrentFiles($any($event.target).checked)"
+              aria-label="Select current files"
+            />
+          </th>
+          <th>File</th>
+          <th>Type</th>
+          <th>Status</th>
+          <th>Stage</th>
+          <th>Created</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let file of files">
+          <td class="select-col">
+            <input
+              type="checkbox"
+              [checked]="selectedFileIds.has(file.fileId)"
+              (change)="toggleFile(file, $any($event.target).checked)"
+              [attr.aria-label]="'Select ' + file.fileName"
+            />
+          </td>
+          <td>
+            <strong>{{ file.fileName }}</strong>
+            <span>{{ file.parentFolder || 'root' }}</span>
+          </td>
+          <td>{{ file.fileType || file.extension }}</td>
+          <td>
+            <span class="status-pill">{{ file.uploadStatus || 'unknown' }}</span>
+          </td>
+          <td>{{ file.stage || '-' }}</td>
+          <td>{{ formatDate(file.createdAt) }}</td>
+          <td class="actions-cell">
+            <button class="ghost-button" type="button" (click)="fileOpened.emit(file)">Open</button>
+          </td>
+        </tr>
+        <tr *ngIf="files.length === 0">
+          <td colspan="7" class="empty-cell">No files in this folder.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>

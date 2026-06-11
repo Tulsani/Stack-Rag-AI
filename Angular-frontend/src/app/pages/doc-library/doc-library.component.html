@@ -1,0 +1,109 @@
+<header class="page-header">
+  <div>
+    <h2>Doc Library</h2>
+    <p>Browse client folders and query the embedded document chunks.</p>
+  </div>
+  <div class="header-actions">
+    <div class="selection-count">{{ selectedFiles.length }} selected</div>
+    <button class="secondary-button" type="button" (click)="openChat()">Chat</button>
+  </div>
+</header>
+
+<section class="library-layout">
+  <div class="library-main">
+    <section class="panel filter-panel">
+      <div class="field">
+        <label for="library-client">Client ID</label>
+        <input id="library-client" name="clientId" [(ngModel)]="clientId" />
+      </div>
+
+      <div class="field">
+        <label for="library-search">Search</label>
+        <input id="library-search" name="search" [(ngModel)]="search" />
+      </div>
+
+      <div class="field">
+        <label for="library-status">Status</label>
+        <select id="library-status" name="status" [(ngModel)]="status">
+          <option value="">Any</option>
+          <option value="PENDING">PENDING</option>
+          <option value="COMPLETE">COMPLETE</option>
+          <option value="FAILED">FAILED</option>
+        </select>
+      </div>
+
+      <div class="filter-actions">
+        <button class="primary-button" type="button" (click)="loadFolder()">Refresh</button>
+        <button class="ghost-button" type="button" (click)="clearFilters()">Reset</button>
+      </div>
+    </section>
+
+    <p class="status-line" [class.error]="statusType === 'error'">{{ statusMessage }}</p>
+
+    <app-file-browser
+      [folderResponse]="folderResponse"
+      [selectedFileIds]="selectedFileIds"
+      [isLoading]="isLoading"
+      (folderChanged)="loadFolder($event)"
+      (fileOpened)="openFile($event)"
+      (selectionChanged)="updateSelectedFiles($event)"
+    />
+
+    <section class="panel preview-panel" *ngIf="previewFile">
+      <header class="preview-header">
+        <div>
+          <h3>{{ previewFile.fileName }}</h3>
+          <p>{{ previewFile.mimeType || previewFile.extension }} · {{ previewFile.parentFolder || 'root' }}</p>
+        </div>
+
+        <div class="preview-actions">
+          <button class="ghost-button" type="button" (click)="openPreviewInNewTab()" [disabled]="!previewUrl">
+            Open in new tab
+          </button>
+          <button class="icon-button" type="button" aria-label="Close preview" title="Close preview" (click)="closePreview()">
+            x
+          </button>
+        </div>
+      </header>
+
+      <div class="preview-loading" *ngIf="isPreviewLoading">Loading preview...</div>
+
+      <iframe
+        class="document-preview"
+        *ngIf="safePreviewUrl && !isPreviewLoading"
+        [src]="safePreviewUrl"
+        [title]="previewFile.fileName"
+      ></iframe>
+    </section>
+  </div>
+</section>
+
+<button
+  class="chat-launcher"
+  type="button"
+  *ngIf="!isChatOpen"
+  (click)="openChat()"
+>
+  Chat
+</button>
+
+<section
+  class="chat-drawer"
+  *ngIf="isChatOpen"
+  [style.width.px]="chatWidth"
+  [class.resizing]="isResizingChat"
+>
+  <button
+    class="resize-handle"
+    type="button"
+    aria-label="Resize chat"
+    title="Resize chat"
+    (mousedown)="startChatResize($event)"
+  ></button>
+
+  <app-chat-panel
+    [clientId]="clientId"
+    [selectedFiles]="selectedFiles"
+    (closed)="closeChat()"
+  />
+</section>

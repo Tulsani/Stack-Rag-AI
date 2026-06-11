@@ -1,0 +1,133 @@
+.browser-panel {
+  overflow: hidden;
+}
+
+.browser-toolbar {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #e1e7df;
+}
+
+.breadcrumbs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.breadcrumb {
+  border: 0;
+  background: #eef4ec;
+  color: #294238;
+  min-height: 32px;
+  border-radius: 8px;
+  padding: 0 10px;
+  font-weight: 800;
+}
+
+.scan-note {
+  color: #8b5e17;
+  font-size: 0.82rem;
+}
+
+.loading-state,
+.empty-cell {
+  padding: 26px;
+  color: #66736e;
+  text-align: center;
+}
+
+.folder-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 1px solid #e1e7df;
+}
+
+.folder-tile {
+  border: 1px solid #d7dfd8;
+  border-radius: 8px;
+  background: #ffffff;
+  min-height: 86px;
+  padding: 12px;
+  display: grid;
+  justify-items: start;
+  gap: 5px;
+  color: #21312b;
+  text-align: left;
+}
+
+.folder-icon {
+  color: #0f5f4a;
+  font-size: 1.1rem;
+}
+
+.folder-tile span:not(.folder-icon) {
+  font-weight: 900;
+}
+
+.folder-tile small {
+  color: #66736e;
+}
+
+.file-table-wrap {
+  overflow-x: auto;
+}
+
+.file-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 760px;
+}
+
+th,
+td {
+  padding: 13px 14px;
+  border-bottom: 1px solid #e7ece5;
+  text-align: left;
+  vertical-align: middle;
+}
+
+th {
+  color: #66736e;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+td strong,
+td span {
+  display: block;
+}
+
+td strong {
+  color: #18211f;
+}
+
+td span {
+  color: #69756f;
+  font-size: 0.85rem;
+  margin-top: 3px;
+}
+
+.select-col {
+  width: 46px;
+}
+
+.status-pill {
+  display: inline-block;
+  border: 1px solid #cbd8ce;
+  background: #f1f6ee;
+  color: #284238;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.actions-cell {
+  width: 100px;
+}
