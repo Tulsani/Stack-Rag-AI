@@ -4,8 +4,9 @@ import logging
 import os
 from functools import lru_cache
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from .config import Settings
 from .mistral_client import MistralClient
@@ -34,6 +35,17 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def require_api_key(request: Request, call_next):
+    if request.method == "OPTIONS" or request.url.path in {"/health"}:
+        return await call_next(request)
+
+    if request.headers.get("x-api-key-header") != get_settings().api_key:
+        return JSONResponse(status_code=403, content={"detail": "Invalid API key"})
+
+    return await call_next(request)
+
+
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse(status="ok")
@@ -58,8 +70,13 @@ def hybrid_query(request: HybridQueryRequest) -> QueryResponse:
 
 
 @lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    return Settings.from_env()
+
+
+@lru_cache(maxsize=1)
 def get_query_service() -> QueryService:
-    settings = Settings.from_env()
+    settings = get_settings()
     mistral = MistralClient(
         api_key=settings.mistral_api_key,
         embed_model=settings.mistral_embed_model,

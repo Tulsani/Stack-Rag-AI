@@ -26,6 +26,7 @@ SUPPORTED_MIME_TYPES = set(MIME_TO_EXTENSION)
 
 @dataclass(frozen=True)
 class Settings:
+    api_key: str
     upload_bucket: str
     documents_table: str
     presign_expiry_seconds: int
@@ -33,6 +34,7 @@ class Settings:
 
     @classmethod
     def from_env(cls) -> "Settings":
+        api_key = os.getenv("API_KEY","f3fedd47-3784-4508-b1a6-d0be676a8dc7")
         upload_bucket = os.getenv("UPLOAD_BUCKET")
         documents_table = os.getenv("DOCUMENTS_TABLE")
 
@@ -41,6 +43,7 @@ class Settings:
             for name, value in (
                 ("UPLOAD_BUCKET", upload_bucket),
                 ("DOCUMENTS_TABLE", documents_table),
+                ("API_KEY", api_key),
             )
             if not value
         ]
@@ -50,6 +53,7 @@ class Settings:
         cors_origins = os.getenv("CORS_ORIGINS") or os.getenv("CORS_ORIGIN") or "*"
 
         return cls(
+            api_key=api_key,
             upload_bucket=upload_bucket,
             documents_table=documents_table,
             presign_expiry_seconds=int(

@@ -33,6 +33,10 @@
       ],
       "secrets": [
         {
+          "name": "API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:453875231722:secret:sai/app/api-key"
+        },
+        {
           "name": "MISTRAL_API_KEY",
           "valueFrom": "arn:aws:secretsmanager:us-east-1:453875231722:secret:sai/mistral/api-key"
         },

@@ -96,6 +96,7 @@ class QueryService:
             question=question,
             context=build_context(usable_citations),
             answer_style=plan.answer_style,
+            history=request.history,
         )
         hallucination_check = check_answer_citations(
             answer,
@@ -197,6 +198,7 @@ class QueryService:
             question=question,
             context=build_context(usable_citations),
             answer_style=plan.answer_style,
+            history=request.history,
         )
         hallucination_check = check_answer_citations(
             answer,
@@ -236,12 +238,21 @@ class QueryService:
                 direct_answer="Hello. Ask a question about the uploaded knowledge base and I can search it."
                 if _is_greeting(question)
                 else None,
-                rewritten_queries=self._rewrite_queries(question, request.use_query_rewrite, request.max_rewrites),
+                rewritten_queries=self._rewrite_queries(
+                    question,
+                    request.use_query_rewrite,
+                    request.max_rewrites,
+                    request.history,
+                ),
                 answer_style="conversational" if _is_greeting(question) else "factual",
             )
 
         try:
-            plan = self.mistral.plan_query(question, request.max_rewrites if request.use_query_rewrite else 0)
+            plan = self.mistral.plan_query(
+                question,
+                request.max_rewrites if request.use_query_rewrite else 0,
+                history=request.history,
+            )
         except Exception:
             logger.exception("Query planning failed; falling back to local greeting check and rewrite")
             return QueryPlan(
@@ -250,7 +261,12 @@ class QueryService:
                 direct_answer="Hello. Ask a question about the uploaded knowledge base and I can search it."
                 if _is_greeting(question)
                 else None,
-                rewritten_queries=self._rewrite_queries(question, request.use_query_rewrite, request.max_rewrites),
+                rewritten_queries=self._rewrite_queries(
+                    question,
+                    request.use_query_rewrite,
+                    request.max_rewrites,
+                    request.history,
+                ),
                 answer_style="conversational" if _is_greeting(question) else "factual",
             )
 
@@ -258,11 +274,17 @@ class QueryService:
             plan.rewritten_queries = []
         return plan
 
-    def _rewrite_queries(self, question: str, enabled: bool, max_rewrites: int) -> list[str]:
+    def _rewrite_queries(
+        self,
+        question: str,
+        enabled: bool,
+        max_rewrites: int,
+        history: list,
+    ) -> list[str]:
         if not enabled or max_rewrites <= 0:
             return []
         try:
-            return self.mistral.rewrite_queries(question, max_rewrites)
+            return self.mistral.rewrite_queries(question, max_rewrites, history=history)
         except Exception:
             logger.exception("Query rewrite failed; continuing with original query only")
             return []

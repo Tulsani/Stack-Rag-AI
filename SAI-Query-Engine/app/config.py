@@ -26,6 +26,7 @@ def _float_env(name: str, default: float) -> float:
 
 @dataclass(frozen=True)
 class Settings:
+    api_key: str
     mistral_api_key: str
     mistral_embed_model: str
     mistral_chat_model: str
@@ -43,6 +44,7 @@ class Settings:
     @classmethod
     def from_env(cls) -> "Settings":
         required = {
+            "API_KEY": os.getenv("API_KEY","f3fedd47-3784-4508-b1a6-d0be676a8dc7"),
             "MISTRAL_API_KEY": os.getenv("MISTRAL_API_KEY"),
             "POSTGRES_HOST": os.getenv("POSTGRES_HOST"),
             "POSTGRES_DB": os.getenv("POSTGRES_DB"),
@@ -54,6 +56,7 @@ class Settings:
             raise RuntimeError(f"Missing required environment variables: {', '.join(missing)}")
 
         return cls(
+            api_key=required["API_KEY"],
             mistral_api_key=required["MISTRAL_API_KEY"],
             mistral_embed_model=os.getenv("MISTRAL_EMBED_MODEL", "mistral-embed"),
             mistral_chat_model=os.getenv("MISTRAL_CHAT_MODEL", "mistral-small-latest"),

@@ -36,6 +36,17 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def require_api_key(request: Request, call_next):
+    if request.method == "OPTIONS" or request.url.path in {"/health", "/ingestion/health"}:
+        return await call_next(request)
+
+    if request.headers.get("x-api-key-header") != settings.api_key:
+        return JSONResponse(status_code=403, content={"detail": "Invalid API key"})
+
+    return await call_next(request)
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}

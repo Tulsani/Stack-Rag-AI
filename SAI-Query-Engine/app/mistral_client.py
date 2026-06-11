@@ -6,7 +6,7 @@ from typing import Any
 
 import httpx
 
-from .models import QueryPlan
+from .models import ChatHistoryMessage, QueryPlan
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +43,15 @@ class MistralClient:
             )
         return embedding
 
-    def answer(self, question: str, context: str, answer_style: str = "factual") -> str:
+    def answer(
+        self,
+        question: str,
+        context: str,
+        answer_style: str = "factual",
+        history: list[ChatHistoryMessage] | None = None,
+    ) -> str:
         style_instructions = _answer_style_instructions(answer_style)
+        history_context = _format_chat_history(history or [])
         payload = {
             "model": self.chat_model,
             "temperature": 0.1,
@@ -62,14 +69,23 @@ class MistralClient:
                 },
                 {
                     "role": "user",
-                    "content": f"Question:\n{question}\n\nContext:\n{context}",
+                    "content": (
+                        f"Recent conversation:\n{history_context}\n\n"
+                        f"Question:\n{question}\n\nContext:\n{context}"
+                    ),
                 },
             ],
         }
         result = self._post("https://api.mistral.ai/v1/chat/completions", payload)
         return _message_content_to_text(result["choices"][0]["message"]["content"]).strip()
 
-    def plan_query(self, question: str, max_rewrites: int) -> QueryPlan:
+    def plan_query(
+        self,
+        question: str,
+        max_rewrites: int,
+        history: list[ChatHistoryMessage] | None = None,
+    ) -> QueryPlan:
+        history_context = _format_chat_history(history or [])
         payload = {
             "model": self.query_rewrite_model,
             "temperature": 0.1,
@@ -101,6 +117,7 @@ class MistralClient:
                 {
                     "role": "user",
                     "content": (
+                        f"Recent conversation:\n{history_context}\n\n"
                         f"Question: {question}\n"
                         f"Generate up to {max_rewrites} rewritten retrieval queries."
                     ),
@@ -120,10 +137,16 @@ class MistralClient:
             plan.direct_answer = "I can help answer questions about the uploaded knowledge base."
         return plan
 
-    def rewrite_queries(self, question: str, max_rewrites: int) -> list[str]:
+    def rewrite_queries(
+        self,
+        question: str,
+        max_rewrites: int,
+        history: list[ChatHistoryMessage] | None = None,
+    ) -> list[str]:
         if max_rewrites <= 0:
             return []
 
+        history_context = _format_chat_history(history or [])
         payload = {
             "model": self.query_rewrite_model,
             "temperature": 0.2,
@@ -142,6 +165,7 @@ class MistralClient:
                 {
                     "role": "user",
                     "content": (
+                        f"Recent conversation:\n{history_context}\n\n"
                         f"Question: {question}\n"
                         f"Return up to {max_rewrites} rewritten search queries."
                     ),
@@ -200,6 +224,16 @@ def _message_content_to_text(content: Any) -> str:
                 parts.append(item.get("text", ""))
         return "".join(parts)
     return str(content)
+
+
+def _format_chat_history(history: list[ChatHistoryMessage]) -> str:
+    if not history:
+        return "None."
+
+    return "\n".join(
+        f"{message.role}: {' '.join(message.content.split())}"
+        for message in history[-3:]
+    )
 
 
 def _clean_rewrites(question: str, queries: Any, max_rewrites: int) -> list[str]:

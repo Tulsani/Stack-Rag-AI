@@ -25,6 +25,12 @@
         { "name": "CORS_ORIGINS", "value": "*" },
         { "name": "LOG_LEVEL", "value": "INFO" }
       ],
+      "secrets": [
+        {
+          "name": "API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:453875231722:secret:sai/app/api-key"
+        }
+      ],
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
