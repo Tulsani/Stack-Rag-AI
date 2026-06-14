@@ -3,7 +3,7 @@
 
 ![system-architecture](./statics/Stack-RAG-system-architecture.png)
 
-Retrieval is implemented directly in application code and SQL. The project does not use LangChain, LlamaIndex, Haystack, a managed vector database, an external search library, or any external RAG framework.
+A FastAPI-based RAG system hosted primarily on AWS, consisting of separate containerized ingestion, embedding, retrieval, and query services to support independent scaling. The solution uses PostgreSQL for storage, custom-built retrieval and ranking logic (without external RAG or search frameworks), and scoped IAM permissions between services to enforce least-privilege access and maintain security.
 
 ### The implementation is split into independently scalable microservices
 -  Uploading service
